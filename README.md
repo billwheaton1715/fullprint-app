@@ -38,10 +38,16 @@ This will compile your project and store the build artifacts in the `dist/` dire
 
 ## Running unit tests
 
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
+This project uses Jest for unit testing. To run tests locally in watch mode, use:
 
 ```bash
-ng test
+yarn test
+```
+
+For a single-run (CI) invocation, use:
+
+```bash
+yarn test:ci
 ```
 
 ## Running end-to-end tests
