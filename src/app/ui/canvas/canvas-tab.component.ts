@@ -115,9 +115,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
   private onWheel = (e: WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const rect = this.canvasRef.nativeElement.getBoundingClientRect();
-    const sx = e.clientX - rect.left;
-    const sy = e.clientY - rect.top;
+    const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, this.canvasRef.nativeElement);
     this.viewport.zoomAt(delta, sx, sy);
     this.renderer.render(this.canvasRef.nativeElement, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
   };
@@ -125,9 +123,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
   private onPointerDown = (e: PointerEvent) => {
     const canvas = this.canvasRef.nativeElement;
     canvas.setPointerCapture?.(e.pointerId);
-    const rect = canvas.getBoundingClientRect();
-    const sx = e.clientX - rect.left;
-    const sy = e.clientY - rect.top;
+    const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
     const world = this.viewport.screenToWorld(sx, sy);
 
     if (e.button === 0) {
@@ -158,8 +154,9 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
   };
 
   private onMouseMove = (e: MouseEvent) => {
-    this._pointerScreenX = e.clientX - this.canvasRef.nativeElement.getBoundingClientRect().left;
-    this._pointerScreenY = e.clientY - this.canvasRef.nativeElement.getBoundingClientRect().top;
+    const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, this.canvasRef.nativeElement);
+    this._pointerScreenX = sx;
+    this._pointerScreenY = sy;
     this.renderer.render(this.canvasRef.nativeElement, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
   };
 
@@ -167,15 +164,14 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
     const canvas = this.canvasRef.nativeElement;
     if (this.activeInteraction) {
       if (this.activeInteraction.type === 'drag-select') {
-        this.activeInteraction.x1 = e.clientX - canvas.getBoundingClientRect().left;
-        this.activeInteraction.y1 = e.clientY - canvas.getBoundingClientRect().top;
+        const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
+        this.activeInteraction.x1 = sx;
+        this.activeInteraction.y1 = sy;
         this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
         return;
       } else if (this.activeInteraction.type === 'drag-shape') {
         const drag = this.activeInteraction;
-        const rect = canvas.getBoundingClientRect();
-        const sx = e.clientX - rect.left;
-        const sy = e.clientY - rect.top;
+        const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
         const world = this.viewport.screenToWorld(sx, sy);
         const dxPx = world.xPx - drag.startWorldX;
         const dyPx = world.yPx - drag.startWorldY;
@@ -238,9 +234,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
   private onClick = (e: MouseEvent) => {
     if (this._isPanning) return;
     const canvas = this.canvasRef.nativeElement;
-    const rect = canvas.getBoundingClientRect();
-    const sx = e.clientX - rect.left;
-    const sy = e.clientY - rect.top;
+    const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
     const world = this.viewport.screenToWorld(sx, sy);
 
     const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
@@ -266,11 +260,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
 
   public drawOverlays(ctx: CanvasRenderingContext2D) {
     const canvas = this.canvasRef.nativeElement;
-    const rect = canvas.getBoundingClientRect();
-    const screenW = rect.width;
-    const screenH = rect.height;
-    const topLeft = this.viewport.screenToWorld(0, 0);
-    const bottomRight = this.viewport.screenToWorld(screenW, screenH);
+    const { topLeft, bottomRight } = this.viewport.getVisibleWorldRect(canvas);
 
     // Grid
     if (this.showGrid) {
@@ -281,7 +271,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
       const endY = Math.ceil(bottomRight.yPx / spacingPx) * spacingPx;
       ctx.save();
       ctx.strokeStyle = '#eee';
-      ctx.lineWidth = 1 / (this.viewport.scale || 1);
+      ctx.lineWidth = 1 / (this.viewport.getScale() || 1);
       for (let x = startX; x <= endX; x += spacingPx) {
         ctx.beginPath();
         ctx.moveTo(x, topLeft.yPx - spacingPx);
@@ -302,7 +292,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
       ctx.save();
       ctx.setLineDash([4, 4]);
       ctx.strokeStyle = '#888';
-      ctx.lineWidth = 1 / (this.viewport.scale || 1);
+      ctx.lineWidth = 1 / (this.viewport.getScale() || 1);
       for (const s of this.shapes || []) {
         try {
           if (s && typeof s.boundingBox === 'function') {
@@ -321,7 +311,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
         ctx.save();
         ctx.setLineDash([6, 3]);
         ctx.strokeStyle = '#0078D7';
-        ctx.lineWidth = 2 / (this.viewport.scale || 1);
+        ctx.lineWidth = 2 / (this.viewport.getScale() || 1);
         const x = groupBox.topLeft.x.toUnit('px');
         const y = groupBox.topLeft.y.toUnit('px');
         const w = groupBox.width.toUnit('px');
@@ -360,7 +350,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
 
       ctx.save();
       ctx.strokeStyle = '#ff0000';
-      ctx.lineWidth = 2 / (this.viewport.scale || 1);
+      ctx.lineWidth = 2 / (this.viewport.getScale() || 1);
       for (const s of this.selectedShapes) {
         try { s.toCanvas(ctx); } catch {}
       }
@@ -370,7 +360,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
     if (this.hoveredShape && (!this.selectedShapes || !this.selectedShapes.includes(this.hoveredShape))) {
       ctx.save();
       ctx.strokeStyle = '#00aaff';
-      ctx.lineWidth = 1 / (this.viewport.scale || 1);
+      ctx.lineWidth = 1 / (this.viewport.getScale() || 1);
       try { this.hoveredShape.toCanvas(ctx); } catch {}
       ctx.restore();
     }
@@ -380,7 +370,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
       ctx.save();
       ctx.strokeStyle = '#0078D7';
       ctx.setLineDash([4, 2]);
-      ctx.lineWidth = 1.5 / (this.viewport.scale || 1);
+      ctx.lineWidth = 1.5 / (this.viewport.getScale() || 1);
       const r = this.activeInteraction;
       ctx.strokeRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
       ctx.restore();
@@ -392,7 +382,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
       const wy = world.yPx;
       ctx.save();
       ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-      ctx.lineWidth = 1 / (this.viewport.scale || 1);
+      ctx.lineWidth = 1 / (this.viewport.getScale() || 1);
       const snapX = Math.round(wx);
       const snapY = Math.round(wy);
       ctx.beginPath();

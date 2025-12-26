@@ -1,4 +1,51 @@
 export class CanvasViewport {
+  /**
+   * Get the current scale (zoom factor).
+   */
+  getScale(): number {
+    return this.scale;
+  }
+
+  /**
+   * Get the current horizontal offset.
+   */
+  getOffsetX(): number {
+    return this.offsetX;
+  }
+
+  /**
+   * Get the current vertical offset.
+   */
+  getOffsetY(): number {
+    return this.offsetY;
+  }
+    /**
+     * Convert a MouseEvent or PointerEvent to screen coordinates relative to the canvas.
+     */
+    getScreenCoordsFromEvent(e: MouseEvent | PointerEvent, canvas: HTMLCanvasElement): { sx: number, sy: number } {
+      const rect = canvas.getBoundingClientRect();
+      return { sx: e.clientX - rect.left, sy: e.clientY - rect.top };
+    }
+
+    /**
+     * Convert a screen rectangle (sx0, sy0, sx1, sy1) to a world rectangle in px.
+     */
+    screenRectToWorldRect(sx0: number, sy0: number, sx1: number, sy1: number) {
+      const tl = this.screenToWorld(sx0, sy0);
+      const br = this.screenToWorld(sx1, sy1);
+      return { xMin: Math.min(tl.xPx, br.xPx), xMax: Math.max(tl.xPx, br.xPx), yMin: Math.min(tl.yPx, br.yPx), yMax: Math.max(tl.yPx, br.yPx) };
+    }
+
+    /**
+     * Get the world rectangle (in px) for the visible canvas area.
+     */
+    getVisibleWorldRect(canvas: HTMLCanvasElement) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        topLeft: this.screenToWorld(0, 0),
+        bottomRight: this.screenToWorld(rect.width, rect.height)
+      };
+    }
   scale = 1;
   offsetX = 0;
   offsetY = 0;
