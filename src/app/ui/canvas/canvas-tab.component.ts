@@ -47,6 +47,14 @@ import { CanvasViewport } from './canvas-viewport';
   template: `<div class="canvas-host"><canvas #canvasEl></canvas></div>`,
   styles: [`.canvas-host{width:100%;height:100%;display:block}canvas{display:block;width:100%;height:100%}`]
 })
+/**
+ * Invariants:
+ * - All interaction state is owned by this component (activeInteraction, selection, hover).
+ * - Only drag-shape and drag-select use pointer capture; all pointer-captured state is explicit.
+ * - All world/screen coordinate math is delegated to CanvasViewport.
+ * - Shape arrays are treated as immutable; mutations produce new arrays.
+ * - Rendering is side-effectful but only occurs in response to explicit triggers (event handlers, input changes).
+ */
 export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnDestroy {
   @ViewChild('canvasEl', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
   @Input() shapes: any[] = [];
