@@ -44,6 +44,7 @@ import { Component, ElementRef, Input, OnDestroy, OnInit, OnChanges, SimpleChang
 import { CommonModule } from '@angular/common';
 import { CanvasRendererService } from './canvas-renderer.service';
 import { CanvasViewport } from './canvas-viewport';
+import Shape from '../../core/geometry/Shape';
 
 @Component({
   standalone: true,
@@ -52,14 +53,6 @@ import { CanvasViewport } from './canvas-viewport';
   template: `<div class="canvas-host"><canvas #canvasEl></canvas></div>`,
   styles: [`.canvas-host{width:100%;height:100%;display:block}canvas{display:block;width:100%;height:100%}`]
 })
-/**
- * Invariants:
- * - All interaction state is owned by this component (activeInteraction, selection, hover).
- * - Only drag-shape and drag-select use pointer capture; all pointer-captured state is explicit.
- * - All world/screen coordinate math is delegated to CanvasViewport.
- * - Shape arrays are treated as immutable; mutations produce new arrays.
- * - Rendering is side-effectful but only occurs in response to explicit triggers (event handlers, input changes).
- */
 export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnDestroy {
   @ViewChild('canvasEl', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
   @Input() shapes: any[] = [];
@@ -76,10 +69,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
   private _isPanning = false;
   private _lastX = 0;
   private _lastY = 0;
-  /**
-   * Only non-null during pointer-captured drag-shape or drag-select interactions.
-   * type: 'drag-shape' | 'drag-select'
-   */
+
   private activeInteraction: null | (
     { type: 'drag-shape', original: any, startWorldX: number, startWorldY: number }
     | { type: 'drag-select', x0: number, y0: number, x1: number, y1: number }
@@ -88,9 +78,31 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
   constructor(private renderer: CanvasRendererService) {}
 
   /**
-   * Centralized selection operation application.
-   * All selection changes must go through this method.
+   * Centralized group transform application.
+   * Applies a transform function to target shapes and updates this.shapes atomically.
    */
+  private applyGroupTransform(
+    targets: any[],
+    transformFn: (shape: any) => any,
+    previewOnly = false
+  ): any[] {
+    if (!targets || targets.length === 0) return this.shapes;
+
+    const targetSet = new Set(targets);
+    const newShapes = this.shapes.map(s =>
+      targetSet.has(s) ? transformFn(s) : s
+    );
+
+    if (previewOnly) return newShapes;
+
+    this.shapes = newShapes;
+
+    // 🔑 Rebind selectedShapes to transformed instances (NO re-transform)
+    this.selectedShapes = this.shapes.filter(s => targetSet.has(s));
+
+    return this.shapes;
+  }
+
   private applySelectionOperation(op: SelectionOperation) {
     switch (op.type) {
       case 'replace':
@@ -124,13 +136,13 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
     window.addEventListener('pointerup', this.onPointerUp);
     window.addEventListener('resize', this.onResize);
 
-    this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
+    this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, ctx => this.drawOverlays(ctx));
   }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (!this._mounted) return;
     if (changes['shapes']) {
-      this.renderer.render(this.canvasRef.nativeElement, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
+      this.renderer.render(this.canvasRef.nativeElement, this.shapes, this.viewport, { background: '#fff' }, ctx => this.drawOverlays(ctx));
     }
   }
 
@@ -146,7 +158,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
   }
 
   private onResize = () => {
-    this.renderer.render(this.canvasRef.nativeElement, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
+    this.renderer.render(this.canvasRef.nativeElement, this.shapes, this.viewport, { background: '#fff' }, ctx => this.drawOverlays(ctx));
   };
 
   private onWheel = (e: WheelEvent) => {
@@ -154,7 +166,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, this.canvasRef.nativeElement);
     this.viewport.zoomAt(delta, sx, sy);
-    this.renderer.render(this.canvasRef.nativeElement, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
+    this.renderer.render(this.canvasRef.nativeElement, this.shapes, this.viewport, { background: '#fff' }, ctx => this.drawOverlays(ctx));
   };
 
   private onPointerDown = (e: PointerEvent) => {
@@ -214,12 +226,19 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
         const dyPx = world.yPx - drag.startWorldY;
         const dxM = Measurement.fromPx(dxPx);
         const dyM = Measurement.fromPx(dyPx);
-        const preview = this.shapes.map(s => {
-          if (s === drag.original) {
-            try { return s.translate(dxM, dyM); } catch { return s; }
-          }
-          return s;
-        });
+        // Use centralized group transform for drag-shape preview (only move the original shape)
+        const preview = this.applyGroupTransform(
+          [drag.original],
+          s => {
+            try {
+              return s.translate(dxM, dyM);
+            } catch {
+              return s;
+            }
+          },
+          true
+        );
+        
         this.renderer.render(canvas, preview, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
         return;
       }
@@ -289,7 +308,44 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
         // For test compatibility: set _dragSelectRect to null so tests expecting this property pass
         (this as any)._dragSelectRect = null;
       }
-      // drag-shape: nothing to do, as preview is not committed
+      // drag-shape: commit translation if needed
+      if (this.activeInteraction.type === 'drag-shape') {
+        const drag = this.activeInteraction;
+        const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
+        const world = this.viewport.screenToWorld(sx, sy);
+        const dxPx = world.xPx - drag.startWorldX;
+        const dyPx = world.yPx - drag.startWorldY;
+
+        if (dxPx !== 0 || dyPx !== 0) {
+          this.applyGroupTransform(
+            [drag.original],
+            s => {
+              try {
+                return s.translate(
+                  Measurement.fromPx(dxPx),
+                  Measurement.fromPx(dyPx)
+                );
+              } catch {
+                return s;
+              }
+            }
+          );
+
+          // 🔑 CRITICAL: reset anchor after commit
+          drag.startWorldX = world.xPx;
+          drag.startWorldY = world.yPx;
+
+          this.renderer.render(
+            canvas,
+            this.shapes,
+            this.viewport,
+            { background: '#fff' },
+            ctx => this.drawOverlays(ctx)
+          );
+        }
+
+      }
+
       this.activeInteraction = null;
     }
     this._isPanning = false;
