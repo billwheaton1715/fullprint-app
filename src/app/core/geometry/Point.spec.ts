@@ -24,13 +24,15 @@ describe('Point', () => {
     expect(a.equals(b)).toBe(true);
   });
 });
-import { Point } from './Point';
+// Removed duplicate import and fixed type usage below
 
 describe('Point', () => {
   it('represents x/y coordinates', () => {
-    const p: Point = { x: 10, y: 20 };
-
-    expect(p.x).toBe(10);
-    expect(p.y).toBe(20);
+    // Use the Point constructor and Measurement for type safety
+    const x = new Measurement(10, Unit.MM);
+    const y = new Measurement(20, Unit.MM);
+    const p = new Point(x, y);
+    expect(p.x.toUnit('mm')).toBe(10);
+    expect(p.y.toUnit('mm')).toBe(20);
   });
 });

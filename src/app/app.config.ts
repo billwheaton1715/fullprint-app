@@ -2,8 +2,8 @@ import { ApplicationConfig, provideZoneChangeDetection, APP_INITIALIZER } from '
 import { provideRouter } from '@angular/router';
 
 import { routes } from './app.routes';
-import { DPI } from './app/core/units/dpi.token';
-import Measurement from './app/core/units/Measurement';
+import { DPI } from './core/units/dpi.token';
+import Measurement from './core/units/Measurement';
 
 export const appConfig: ApplicationConfig = {
   providers: [

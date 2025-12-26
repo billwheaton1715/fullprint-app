@@ -3,7 +3,7 @@ import Point from './Point';
 import Measurement from '../units/Measurement';
 
 describe('BezierCurve', () => {
-  test('perimeter approx, translate, toJson', () => {
+  it('perimeter approx, translate, toJson', () => {
     const p0 = new Point(new Measurement(0), new Measurement(0));
     const p1 = new Point(new Measurement(1), new Measurement(2));
     const p2 = new Point(new Measurement(3), new Measurement(2));

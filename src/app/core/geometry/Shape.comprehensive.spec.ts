@@ -15,13 +15,13 @@ import Ellipse from './Ellipse';
 describe('Shape Comprehensive Test Suite', () => {
   // ===== POINT TESTS =====
   describe('Point', () => {
-    test('construction with Measurement values', () => {
+    it('construction with Measurement values', () => {
       const p = new Point(new Measurement(5, 'mm'), new Measurement(10, 'mm'));
       expect(p.x.toUnit('mm')).toBe(5);
       expect(p.y.toUnit('mm')).toBe(10);
     });
 
-    test('translate returns new instance (immutability)', () => {
+    it('translate returns new instance (immutability)', () => {
       const p1 = new Point(new Measurement(0), new Measurement(0));
       const p2 = p1.translate(new Measurement(5), new Measurement(3));
       expect(p1.x.toUnit('mm')).toBe(0);
@@ -30,21 +30,21 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(p2.y.toUnit('mm')).toBeCloseTo(3);
     });
 
-    test('distanceTo calculates Euclidean distance', () => {
+    it('distanceTo calculates Euclidean distance', () => {
       const p1 = new Point(new Measurement(0), new Measurement(0));
       const p2 = new Point(new Measurement(3), new Measurement(4));
       const dist = p1.distanceTo(p2);
       expect(dist.toUnit('mm')).toBeCloseTo(5);
     });
 
-    test('distanceTo respects DPI conversions', () => {
+    it('distanceTo respects DPI conversions', () => {
       const p1 = new Point(new Measurement(0, 'mm'), new Measurement(0, 'mm'));
       const p2 = new Point(new Measurement(25.4, 'mm'), new Measurement(0, 'mm'));
       const dist = p1.distanceTo(p2);
       expect(dist.toUnit('mm')).toBeCloseTo(25.4);
     });
 
-    test('equals checks point equality', () => {
+    it('equals checks point equality', () => {
       const p1 = new Point(new Measurement(5), new Measurement(10));
       const p2 = new Point(new Measurement(5), new Measurement(10));
       const p3 = new Point(new Measurement(5), new Measurement(11));
@@ -55,7 +55,7 @@ describe('Shape Comprehensive Test Suite', () => {
 
   // ===== LINE TESTS =====
   describe('Line', () => {
-    test('construction with different start and end', () => {
+    it('construction with different start and end', () => {
       const line = new Line(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(3), new Measurement(4))
@@ -63,7 +63,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(line.length().toUnit('mm')).toBeCloseTo(5);
     });
 
-    test('throws on zero-length line', () => {
+    it('throws on zero-length line', () => {
       expect(() => {
         new Line(
           new Point(new Measurement(5), new Measurement(5)),
@@ -72,7 +72,7 @@ describe('Shape Comprehensive Test Suite', () => {
       }).toThrow();
     });
 
-    test('length calculation is correct', () => {
+    it('length calculation is correct', () => {
       const line = new Line(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(5), new Measurement(0))
@@ -83,7 +83,7 @@ describe('Shape Comprehensive Test Suite', () => {
 
   // ===== LINESTRING TESTS =====
   describe('LineString', () => {
-    test('construction requires >= 2 points', () => {
+    it('construction requires >= 2 points', () => {
       const pts = [
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(1)),
@@ -92,13 +92,13 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(ls.points.length).toBe(2);
     });
 
-    test('throws on < 2 points', () => {
+    it('throws on < 2 points', () => {
       expect(() => {
         new LineString([new Point(new Measurement(0), new Measurement(0))]);
       }).toThrow();
     });
 
-    test('perimeter sums segment lengths', () => {
+    it('perimeter sums segment lengths', () => {
       const pts = [
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(3), new Measurement(0)),
@@ -108,7 +108,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(ls.perimeter().toUnit('mm')).toBeCloseTo(7);
     });
 
-    test('area is zero for LineString', () => {
+    it('area is zero for LineString', () => {
       const pts = [
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(3), new Measurement(0)),
@@ -118,7 +118,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(ls.area().toUnit('mm')).toBeCloseTo(0);
     });
 
-    test('translate returns new instance', () => {
+    it('translate returns new instance', () => {
       const pts = [
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(1)),
@@ -129,7 +129,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(ls2.points[0].x.toUnit('mm')).toBeCloseTo(5);
     });
 
-    test('rotate applies angle transformation', () => {
+    it('rotate applies angle transformation', () => {
       const pts = [
         new Point(new Measurement(1), new Measurement(0)),
         new Point(new Measurement(0), new Measurement(1)),
@@ -140,7 +140,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(rotated.points[0].y.toUnit('mm')).toBeCloseTo(1, 4);
     });
 
-    test('scale expands points from origin', () => {
+    it('scale expands points from origin', () => {
       const pts = [
         new Point(new Measurement(1), new Measurement(1)),
         new Point(new Measurement(2), new Measurement(2)),
@@ -151,7 +151,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(scaled.points[1].x.toUnit('mm')).toBeCloseTo(4);
     });
 
-    test('boundingBox contains all points', () => {
+    it('boundingBox contains all points', () => {
       const pts = [
         new Point(new Measurement(1), new Measurement(2)),
         new Point(new Measurement(5), new Measurement(3)),
@@ -163,7 +163,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(bbox.width.toUnit('mm')).toBeCloseTo(4);
     });
 
-    test('contains checks point on segment', () => {
+    it('contains checks point on segment', () => {
       const pts = [
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(4), new Measurement(0)),
@@ -173,7 +173,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(ls.contains(new Point(new Measurement(2), new Measurement(1)))).toBe(false);
     });
 
-    test('toSvg generates path string', () => {
+    it('toSvg generates path string', () => {
       const pts = [
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(10), new Measurement(10)),
@@ -184,7 +184,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(svg).toContain('d=');
     });
 
-    test('toJson serializes shape', () => {
+    it('toJson serializes shape', () => {
       const pts = [
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(1)),
@@ -195,7 +195,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(json.points.length).toBe(2);
     });
 
-    test('equals compares LineStrings', () => {
+    it('equals compares LineStrings', () => {
       const pts1 = [
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(1)),
@@ -212,12 +212,12 @@ describe('Shape Comprehensive Test Suite', () => {
 
   // ===== CIRCLE TESTS =====
   describe('Circle', () => {
-    test('construction with center and radius', () => {
+    it('construction with center and radius', () => {
       const c = new Circle(new Point(new Measurement(0), new Measurement(0)), new Measurement(5));
       expect(c.radius.toUnit('mm')).toBe(5);
     });
 
-    test('throws on non-positive radius', () => {
+    it('throws on non-positive radius', () => {
       expect(() => {
         new Circle(new Point(new Measurement(0), new Measurement(0)), new Measurement(-5));
       }).toThrow();
@@ -226,17 +226,17 @@ describe('Shape Comprehensive Test Suite', () => {
       }).toThrow();
     });
 
-    test('area calculation is correct', () => {
+    it('area calculation is correct', () => {
       const c = new Circle(new Point(new Measurement(0), new Measurement(0)), new Measurement(1));
       expect(c.area().toUnit('mm')).toBeCloseTo(Math.PI);
     });
 
-    test('perimeter calculation is correct', () => {
+    it('perimeter calculation is correct', () => {
       const c = new Circle(new Point(new Measurement(0), new Measurement(0)), new Measurement(1));
       expect(c.perimeter().toUnit('mm')).toBeCloseTo(2 * Math.PI);
     });
 
-    test('translate moves center', () => {
+    it('translate moves center', () => {
       const c1 = new Circle(new Point(new Measurement(0), new Measurement(0)), new Measurement(5));
       const c2 = c1.translate(new Measurement(3), new Measurement(4));
       expect(c2.center.x.toUnit('mm')).toBeCloseTo(3);
@@ -244,34 +244,34 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(c2.radius.toUnit('mm')).toBeCloseTo(5);
     });
 
-    test('rotate moves center around origin', () => {
+    it('rotate moves center around origin', () => {
       const c = new Circle(new Point(new Measurement(1), new Measurement(0)), new Measurement(5));
       const rotated = c.rotate(new Angle(Math.PI / 2, 'rad'), new Point(new Measurement(0), new Measurement(0)));
       expect(rotated.center.x.toUnit('mm')).toBeCloseTo(0, 4);
       expect(rotated.center.y.toUnit('mm')).toBeCloseTo(1, 4);
     });
 
-    test('scale increases radius', () => {
+    it('scale increases radius', () => {
       const c = new Circle(new Point(new Measurement(0), new Measurement(0)), new Measurement(1));
       const scaled = c.scale(3, new Point(new Measurement(0), new Measurement(0)));
       expect(scaled.radius.toUnit('mm')).toBeCloseTo(3);
     });
 
-    test('boundingBox encompasses circle', () => {
+    it('boundingBox encompasses circle', () => {
       const c = new Circle(new Point(new Measurement(0), new Measurement(0)), new Measurement(5));
       const bbox = c.boundingBox();
       expect(bbox.width.toUnit('mm')).toBeCloseTo(10);
       expect(bbox.height.toUnit('mm')).toBeCloseTo(10);
     });
 
-    test('contains point inside circle', () => {
+    it('contains point inside circle', () => {
       const c = new Circle(new Point(new Measurement(0), new Measurement(0)), new Measurement(5));
       expect(c.contains(new Point(new Measurement(0), new Measurement(0)))).toBe(true);
       expect(c.contains(new Point(new Measurement(3), new Measurement(0)))).toBe(true);
       expect(c.contains(new Point(new Measurement(6), new Measurement(0)))).toBe(false);
     });
 
-    test('toSvg generates circle element', () => {
+    it('toSvg generates circle element', () => {
       const c = new Circle(new Point(new Measurement(0), new Measurement(0)), new Measurement(5));
       const svg = c.toSvg();
       expect(svg).toContain('circle');
@@ -280,7 +280,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(svg).toContain('r=');
     });
 
-    test('toJson serializes shape', () => {
+    it('toJson serializes shape', () => {
       const c = new Circle(new Point(new Measurement(5), new Measurement(10)), new Measurement(7));
       const json = c.toJson();
       expect(json.type).toBe('Circle');
@@ -291,7 +291,7 @@ describe('Shape Comprehensive Test Suite', () => {
 
   // ===== RECTANGLE TESTS =====
   describe('Rectangle', () => {
-    test('construction with topLeft, width, height', () => {
+    it('construction with topLeft, width, height', () => {
       const r = new Rectangle(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(10),
@@ -301,13 +301,13 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(r.height.toUnit('mm')).toBe(5);
     });
 
-    test('throws on non-positive dimensions', () => {
+    it('throws on non-positive dimensions', () => {
       expect(() => {
         new Rectangle(new Point(new Measurement(0), new Measurement(0)), new Measurement(-5), new Measurement(5));
       }).toThrow();
     });
 
-    test('area calculation is correct', () => {
+    it('area calculation is correct', () => {
       const r = new Rectangle(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(4),
@@ -316,7 +316,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(r.area().toUnit('mm')).toBeCloseTo(12);
     });
 
-    test('perimeter calculation is correct', () => {
+    it('perimeter calculation is correct', () => {
       const r = new Rectangle(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(4),
@@ -325,7 +325,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(r.perimeter().toUnit('mm')).toBeCloseTo(14);
     });
 
-    test('contains point inside rectangle', () => {
+    it('contains point inside rectangle', () => {
       const r = new Rectangle(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(10),
@@ -335,7 +335,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(r.contains(new Point(new Measurement(11), new Measurement(5)))).toBe(false);
     });
 
-    test('boundingBox returns self', () => {
+    it('boundingBox returns self', () => {
       const r = new Rectangle(
         new Point(new Measurement(1), new Measurement(2)),
         new Measurement(5),
@@ -345,7 +345,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(bbox).toBe(r);
     });
 
-    test('toSvg generates rect element', () => {
+    it('toSvg generates rect element', () => {
       const r = new Rectangle(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(10),
@@ -360,7 +360,7 @@ describe('Shape Comprehensive Test Suite', () => {
 
   // ===== TRIANGLE TESTS =====
   describe('Triangle', () => {
-    test('construction with three non-collinear points', () => {
+    it('construction with three non-collinear points', () => {
       const t = new Triangle(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(4), new Measurement(0)),
@@ -369,7 +369,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(t.area().toUnit('mm')).toBeCloseTo(6);
     });
 
-    test('throws on collinear points', () => {
+    it('throws on collinear points', () => {
       expect(() => {
         new Triangle(
           new Point(new Measurement(0), new Measurement(0)),
@@ -379,7 +379,7 @@ describe('Shape Comprehensive Test Suite', () => {
       }).toThrow();
     });
 
-    test('perimeter sums side lengths', () => {
+    it('perimeter sums side lengths', () => {
       const t = new Triangle(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(3), new Measurement(0)),
@@ -388,7 +388,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(t.perimeter().toUnit('mm')).toBeCloseTo(12);
     });
 
-    test('translate moves all vertices', () => {
+    it('translate moves all vertices', () => {
       const t1 = new Triangle(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(0)),
@@ -399,7 +399,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(t2.a.y.toUnit('mm')).toBeCloseTo(3);
     });
 
-    test('rotate applies angle around origin', () => {
+    it('rotate applies angle around origin', () => {
       const t = new Triangle(
         new Point(new Measurement(1), new Measurement(0)),
         new Point(new Measurement(0), new Measurement(0)),
@@ -410,7 +410,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(rotated.a.y.toUnit('mm')).toBeCloseTo(1, 4);
     });
 
-    test('scale expands from origin', () => {
+    it('scale expands from origin', () => {
       const t = new Triangle(
         new Point(new Measurement(1), new Measurement(1)),
         new Point(new Measurement(2), new Measurement(1)),
@@ -421,7 +421,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(scaled.a.y.toUnit('mm')).toBeCloseTo(2);
     });
 
-    test('contains point inside triangle', () => {
+    it('contains point inside triangle', () => {
       const t = new Triangle(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(4), new Measurement(0)),
@@ -431,7 +431,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(t.contains(new Point(new Measurement(0), new Measurement(4)))).toBe(false);
     });
 
-    test('toJson serializes vertices', () => {
+    it('toJson serializes vertices', () => {
       const t = new Triangle(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(0)),
@@ -447,7 +447,7 @@ describe('Shape Comprehensive Test Suite', () => {
 
   // ===== POLYGON TESTS =====
   describe('Polygon', () => {
-    test('construction requires >= 3 points', () => {
+    it('construction requires >= 3 points', () => {
       const pts = [
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(0)),
@@ -457,7 +457,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(p.points.length).toBe(3);
     });
 
-    test('throws on < 3 points', () => {
+    it('throws on < 3 points', () => {
       expect(() => {
         new Polygon([
           new Point(new Measurement(0), new Measurement(0)),
@@ -466,7 +466,7 @@ describe('Shape Comprehensive Test Suite', () => {
       }).toThrow();
     });
 
-    test('area calculation using shoelace formula', () => {
+    it('area calculation using shoelace formula', () => {
       const pts = [
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(4), new Measurement(0)),
@@ -477,7 +477,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(p.area().toUnit('mm')).toBeCloseTo(16);
     });
 
-    test('perimeter sums all side lengths', () => {
+    it('perimeter sums all side lengths', () => {
       const pts = [
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(3), new Measurement(0)),
@@ -487,7 +487,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(p.perimeter().toUnit('mm')).toBeCloseTo(12);
     });
 
-    test('contains point inside polygon', () => {
+    it('contains point inside polygon', () => {
       const pts = [
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(4), new Measurement(0)),
@@ -499,7 +499,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(p.contains(new Point(new Measurement(5), new Measurement(2)))).toBe(false);
     });
 
-    test('toJson serializes all points', () => {
+    it('toJson serializes all points', () => {
       const pts = [
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(0)),
@@ -514,7 +514,7 @@ describe('Shape Comprehensive Test Suite', () => {
 
   // ===== POLYGON WITH HOLES TESTS =====
   describe('PolygonWithHoles', () => {
-    test('construction with outer polygon and holes', () => {
+    it('construction with outer polygon and holes', () => {
       const outer = new Polygon([
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(4), new Measurement(0)),
@@ -532,7 +532,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(p.holes.length).toBe(1);
     });
 
-    test('area subtracts hole area', () => {
+    it('area subtracts hole area', () => {
       const outer = new Polygon([
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(4), new Measurement(0)),
@@ -549,7 +549,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(p.area().toUnit('mm')).toBeCloseTo(15);
     });
 
-    test('contains excludes points in holes', () => {
+    it('contains excludes points in holes', () => {
       const outer = new Polygon([
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(4), new Measurement(0)),
@@ -567,7 +567,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(p.contains(new Point(new Measurement(1.5), new Measurement(1.5)))).toBe(false);
     });
 
-    test('translate moves outer and all holes', () => {
+    it('translate moves outer and all holes', () => {
       const outer = new Polygon([
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(4), new Measurement(0)),
@@ -586,7 +586,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(p2.holes[0].points[0].x.toUnit('mm')).toBeCloseTo(6);
     });
 
-    test('toJson includes outer and holes', () => {
+    it('toJson includes outer and holes', () => {
       const outer = new Polygon([
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(4), new Measurement(0)),
@@ -607,7 +607,7 @@ describe('Shape Comprehensive Test Suite', () => {
 
   // ===== ARC TESTS =====
   describe('Arc', () => {
-    test('construction with center, radius, start and end angles', () => {
+    it('construction with center, radius, start and end angles', () => {
       const arc = new Arc(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(5),
@@ -617,7 +617,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(arc.radius.toUnit('mm')).toBe(5);
     });
 
-    test('throws on non-positive radius', () => {
+    it('throws on non-positive radius', () => {
       expect(() => {
         new Arc(
           new Point(new Measurement(0), new Measurement(0)),
@@ -628,7 +628,7 @@ describe('Shape Comprehensive Test Suite', () => {
       }).toThrow();
     });
 
-    test('area calculation for quarter circle', () => {
+    it('area calculation for quarter circle', () => {
       const arc = new Arc(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(10),
@@ -638,7 +638,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(arc.area().toUnit('mm')).toBeCloseTo(0.5 * 10 * 10 * (Math.PI / 2));
     });
 
-    test('perimeter is arc length', () => {
+    it('perimeter is arc length', () => {
       const arc = new Arc(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(10),
@@ -648,7 +648,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(arc.perimeter().toUnit('mm')).toBeCloseTo(10 * (Math.PI / 2));
     });
 
-    test('translate moves center', () => {
+    it('translate moves center', () => {
       const arc1 = new Arc(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(5),
@@ -660,7 +660,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(arc2.center.y.toUnit('mm')).toBeCloseTo(4);
     });
 
-    test('rotate rotates center and angles', () => {
+    it('rotate rotates center and angles', () => {
       const arc = new Arc(
         new Point(new Measurement(5), new Measurement(0)),
         new Measurement(5),
@@ -672,7 +672,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(rotated.center.y.toUnit('mm')).toBeCloseTo(5, 4);
     });
 
-    test('scale increases radius', () => {
+    it('scale increases radius', () => {
       const arc = new Arc(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(5),
@@ -683,7 +683,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(scaled.radius.toUnit('mm')).toBeCloseTo(10);
     });
 
-    test('boundingBox encompasses arc', () => {
+    it('boundingBox encompasses arc', () => {
       const arc = new Arc(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(5),
@@ -694,7 +694,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(bbox.width.toUnit('mm')).toBeGreaterThan(0);
     });
 
-    test('toSvg generates arc path', () => {
+    it('toSvg generates arc path', () => {
       const arc = new Arc(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(5),
@@ -706,7 +706,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(svg).toContain('A');
     });
 
-    test('toJson serializes arc properties', () => {
+    it('toJson serializes arc properties', () => {
       const arc = new Arc(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(5),
@@ -722,7 +722,7 @@ describe('Shape Comprehensive Test Suite', () => {
 
   // ===== BEZIER CURVE TESTS =====
   describe('BezierCurve', () => {
-    test('construction with 4 control points', () => {
+    it('construction with 4 control points', () => {
       const b = new BezierCurve(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(2)),
@@ -733,7 +733,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(b.p3).toBeDefined();
     });
 
-    test('area is zero for curve', () => {
+    it('area is zero for curve', () => {
       const b = new BezierCurve(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(2)),
@@ -743,7 +743,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(b.area().toUnit('mm')).toBeCloseTo(0);
     });
 
-    test('perimeter approximates curve length', () => {
+    it('perimeter approximates curve length', () => {
       const b = new BezierCurve(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(2)),
@@ -754,7 +754,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(len).toBeGreaterThan(4);
     });
 
-    test('translate moves all control points', () => {
+    it('translate moves all control points', () => {
       const b1 = new BezierCurve(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(2)),
@@ -766,7 +766,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(b2.p3.x.toUnit('mm')).toBeCloseTo(9);
     });
 
-    test('rotate applies angle to all control points', () => {
+    it('rotate applies angle to all control points', () => {
       const b = new BezierCurve(
         new Point(new Measurement(1), new Measurement(0)),
         new Point(new Measurement(2), new Measurement(0)),
@@ -777,7 +777,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(rotated.p0.y.toUnit('mm')).toBeCloseTo(1, 4);
     });
 
-    test('scale expands all control points', () => {
+    it('scale expands all control points', () => {
       const b = new BezierCurve(
         new Point(new Measurement(1), new Measurement(1)),
         new Point(new Measurement(2), new Measurement(2)),
@@ -789,7 +789,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(scaled.p3.x.toUnit('mm')).toBeCloseTo(8);
     });
 
-    test('boundingBox encompasses curve samples', () => {
+    it('boundingBox encompasses curve samples', () => {
       const b = new BezierCurve(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(5), new Measurement(10)),
@@ -800,7 +800,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(bbox.width.toUnit('mm')).toBeGreaterThan(0);
     });
 
-    test('contains checks if point is on curve', () => {
+    it('contains checks if point is on curve', () => {
       const b = new BezierCurve(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(1)),
@@ -810,7 +810,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(b.contains(new Point(new Measurement(0), new Measurement(0)))).toBe(true);
     });
 
-    test('toSvg generates Bezier path', () => {
+    it('toSvg generates Bezier path', () => {
       const b = new BezierCurve(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(2)),
@@ -822,7 +822,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(svg).toContain('C');
     });
 
-    test('toJson serializes control points', () => {
+    it('toJson serializes control points', () => {
       const b = new BezierCurve(
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(1), new Measurement(2)),
@@ -838,7 +838,7 @@ describe('Shape Comprehensive Test Suite', () => {
 
   // ===== ELLIPSE TESTS =====
   describe('Ellipse', () => {
-    test('construction with center and radii', () => {
+    it('construction with center and radii', () => {
       const e = new Ellipse(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(5),
@@ -848,7 +848,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(e.radiusY.toUnit('mm')).toBe(3);
     });
 
-    test('throws on non-positive radius', () => {
+    it('throws on non-positive radius', () => {
       expect(() => {
         new Ellipse(
           new Point(new Measurement(0), new Measurement(0)),
@@ -858,7 +858,7 @@ describe('Shape Comprehensive Test Suite', () => {
       }).toThrow();
     });
 
-    test('area calculation is correct', () => {
+    it('area calculation is correct', () => {
       const e = new Ellipse(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(5),
@@ -867,7 +867,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(e.area().toUnit('mm')).toBeCloseTo(Math.PI * 5 * 3);
     });
 
-    test('translate moves center', () => {
+    it('translate moves center', () => {
       const e1 = new Ellipse(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(5),
@@ -878,7 +878,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(e2.center.y.toUnit('mm')).toBeCloseTo(4);
     });
 
-    test('scale increases radii', () => {
+    it('scale increases radii', () => {
       const e = new Ellipse(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(5),
@@ -889,7 +889,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(scaled.radiusY.toUnit('mm')).toBeCloseTo(6);
     });
 
-    test('contains point inside ellipse', () => {
+    it('contains point inside ellipse', () => {
       const e = new Ellipse(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(5),
@@ -900,7 +900,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(e.contains(new Point(new Measurement(6), new Measurement(0)))).toBe(false);
     });
 
-    test('toSvg generates ellipse element', () => {
+    it('toSvg generates ellipse element', () => {
       const e = new Ellipse(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(5),
@@ -912,7 +912,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(svg).toContain('ry=');
     });
 
-    test('toJson serializes ellipse properties', () => {
+    it('toJson serializes ellipse properties', () => {
       const e = new Ellipse(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(5),
@@ -927,7 +927,7 @@ describe('Shape Comprehensive Test Suite', () => {
 
   // ===== INTERACTION & COMPOSITION TESTS =====
   describe('Shape Interactions and Composition', () => {
-    test('circle and rectangle intersection via bbox', () => {
+    it('circle and rectangle intersection via bbox', () => {
       const c = new Circle(new Point(new Measurement(0), new Measurement(0)), new Measurement(5));
       const r = new Rectangle(
         new Point(new Measurement(3), new Measurement(3)),
@@ -937,7 +937,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(c.intersects(r)).toBe(true);
     });
 
-    test('polygon and polygon intersection', () => {
+    it('polygon and polygon intersection', () => {
       const p1 = new Polygon([
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(4), new Measurement(0)),
@@ -953,7 +953,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(p1.intersects(p2)).toBe(true);
     });
 
-    test('chain transformations preserve immutability', () => {
+    it('chain transformations preserve immutability', () => {
       const c1 = new Circle(
         new Point(new Measurement(0), new Measurement(0)),
         new Measurement(5)
@@ -968,7 +968,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(c3.radius.toUnit('mm')).toBeCloseTo(10);
     });
 
-    test('multiple holes in polygon with holes', () => {
+    it('multiple holes in polygon with holes', () => {
       const outer = new Polygon([
         new Point(new Measurement(0), new Measurement(0)),
         new Point(new Measurement(10), new Measurement(0)),
@@ -996,12 +996,12 @@ describe('Shape Comprehensive Test Suite', () => {
 
   // ===== DPI / MEASUREMENT HANDLING TESTS =====
   describe('DPI and Measurement Handling', () => {
-    test('Measurement conversions preserve values', () => {
+    it('Measurement conversions preserve values', () => {
       const m = new Measurement(25.4, 'mm');
       expect(m.toUnit('mm')).toBeCloseTo(25.4);
     });
 
-    test('shapes maintain dimensions through unit conversions', () => {
+    it('shapes maintain dimensions through unit conversions', () => {
       const c = new Circle(
         new Point(new Measurement(10, 'mm'), new Measurement(10, 'mm')),
         new Measurement(5, 'mm')
@@ -1009,7 +1009,7 @@ describe('Shape Comprehensive Test Suite', () => {
       expect(c.radius.toUnit('mm')).toBeCloseTo(5);
     });
 
-    test('distance calculations respect Measurement units', () => {
+    it('distance calculations respect Measurement units', () => {
       const p1 = new Point(new Measurement(0, 'mm'), new Measurement(0, 'mm'));
       const p2 = new Point(new Measurement(10, 'mm'), new Measurement(0, 'mm'));
       expect(p1.distanceTo(p2).toUnit('mm')).toBeCloseTo(10);

@@ -3,7 +3,7 @@ import Point from './Point';
 import Measurement from '../units/Measurement';
 
 describe('Polygon', () => {
-  test('square area and perimeter', () => {
+  it('square area and perimeter', () => {
     const pts = [
       new Point(new Measurement(0), new Measurement(0)),
       new Point(new Measurement(1), new Measurement(0)),

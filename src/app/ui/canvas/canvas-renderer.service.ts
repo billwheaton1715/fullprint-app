@@ -3,7 +3,7 @@ import { CanvasViewport } from './canvas-viewport';
 
 @Injectable({ providedIn: 'root' })
 export class CanvasRendererService {
-  render(element: HTMLCanvasElement, shapes: any[], viewport?: CanvasViewport, options?: { background?: string }) {
+  render(element: HTMLCanvasElement, shapes: any[], viewport?: CanvasViewport, options?: { background?: string }, overlays?: (ctx: CanvasRenderingContext2D) => void) {
     if (!element) return;
     const ctx = element.getContext('2d');
     if (!ctx) return;
@@ -50,6 +50,9 @@ export class CanvasRendererService {
         // console.error('render error', e);
       }
     }
+
+      // call overlay callback while transform still applied
+      if (overlays) overlays(ctx);
 
     if (viewport) ctx.restore();
   }

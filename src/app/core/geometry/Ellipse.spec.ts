@@ -3,7 +3,7 @@ import Point from './Point';
 import Measurement from '../units/Measurement';
 
 describe('Ellipse', () => {
-  test('area, perimeter, translate, equals', () => {
+  it('area, perimeter, translate, equals', () => {
     const e = new Ellipse(new Point(new Measurement(0), new Measurement(0)), new Measurement(5), new Measurement(3));
     expect(e.area().toUnit('mm')).toBeCloseTo(Math.PI * 5 * 3);
     const peri = e.perimeter().toUnit('mm');

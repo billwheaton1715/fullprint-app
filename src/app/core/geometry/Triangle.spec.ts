@@ -3,7 +3,7 @@ import Point from './Point';
 import Measurement from '../units/Measurement';
 
 describe('Triangle', () => {
-  test('area, perimeter, translate, equals', () => {
+  it('area, perimeter, translate, equals', () => {
     const a = new Point(new Measurement(0), new Measurement(0));
     const b = new Point(new Measurement(3), new Measurement(0));
     const c = new Point(new Measurement(0), new Measurement(4));

@@ -1,38 +1,53 @@
+// ...existing code...
 import { CanvasViewport } from './canvas-viewport';
 
 describe('CanvasViewport', () => {
-  test('panBy updates offsets', () => {
-    const v = new CanvasViewport();
-    expect(v.offsetX).toBe(0);
-    expect(v.offsetY).toBe(0);
-    v.panBy(10, 5);
-    expect(v.offsetX).toBe(10);
-    expect(v.offsetY).toBe(5);
+  it('should pan by the given offsets', () => {
+    const viewport = new CanvasViewport();
+    expect(viewport.offsetX).toBe(0);
+    expect(viewport.offsetY).toBe(0);
+    viewport.panBy(15, -7);
+    expect(viewport.offsetX).toBe(15);
+    expect(viewport.offsetY).toBe(-7);
   });
 
-  test('zoomAt centers on cursor', () => {
-    const v = new CanvasViewport();
-    v.setOffset(0, 0);
-    v.setScale(1);
-    // zoom in by factor 2 at screen point (100,50)
-    v.zoomAt(2, 100, 50);
-    expect(v.scale).toBeCloseTo(2);
-    // offset should become -100, -50 per formula
-    expect(v.offsetX).toBeCloseTo(-100);
-    expect(v.offsetY).toBeCloseTo(-50);
+  it('should zoom at a given screen point and update offset correctly', () => {
+    const viewport = new CanvasViewport();
+    viewport.setOffset(0, 0);
+    viewport.setScale(1);
+    viewport.zoomAt(2, 50, 25);
+    expect(viewport.scale).toBeCloseTo(2);
+    expect(viewport.offsetX).toBeCloseTo(-50);
+    expect(viewport.offsetY).toBeCloseTo(-25);
   });
 
-  test('zoom then pan preserves math', () => {
-    const v = new CanvasViewport();
-    v.setOffset(10, 20);
-    v.setScale(1);
-    v.zoomAt(2, 5, 5);
-    // new offset: old*2 + screen*(1-2) = 20 + 5*(-1) = 15
-    expect(v.offsetX).toBeCloseTo(15);
-    expect(v.scale).toBeCloseTo(2);
-    v.panBy(3, -2);
-    expect(v.offsetX).toBeCloseTo(18);
-    // oldY*2 + 5*(1-2) = 40 -5 = 35 then + (-2) = 33
-    expect(v.offsetY).toBeCloseTo(33);
+  it('should preserve math when zooming then panning', () => {
+    const viewport = new CanvasViewport();
+    viewport.setOffset(10, 20);
+    viewport.setScale(1);
+    viewport.zoomAt(2, 5, 5);
+    // offsetX: 10*2 + 5*(1-2) = 20 - 5 = 15
+    expect(viewport.offsetX).toBeCloseTo(15);
+    expect(viewport.scale).toBeCloseTo(2);
+    viewport.panBy(3, -2);
+    expect(viewport.offsetX).toBeCloseTo(18);
+    // offsetY: 20*2 + 5*(1-2) = 40 - 5 = 35, then +(-2) = 33
+    expect(viewport.offsetY).toBeCloseTo(33);
+  });
+
+  it('should convert between screen and world coordinates', () => {
+    const viewport = new CanvasViewport();
+    viewport.setOffset(10, 20);
+    viewport.setScale(2);
+
+    // worldToScreen
+    const { xPx: sx, yPx: sy } = viewport.worldToScreen(5, 7);
+    expect(sx).toBeCloseTo(5 * 2 + 10);
+    expect(sy).toBeCloseTo(7 * 2 + 20);
+
+    // screenToWorld
+    const { xPx: wx, yPx: wy } = viewport.screenToWorld(30, 34);
+    expect(wx).toBeCloseTo((30 - 10) / 2);
+    expect(wy).toBeCloseTo((34 - 20) / 2);
   });
 });

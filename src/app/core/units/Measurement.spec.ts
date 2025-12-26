@@ -5,18 +5,18 @@ describe('Measurement', () => {
     Measurement.setDpiProvider(() => 96); // reset DPI provider
   });
 
-  test('conversion mm/cm/in to pixels', () => {
+  it('conversion mm/cm/in to pixels', () => {
     expect(new Measurement(25.4, 'mm').toPixels()).toBeCloseTo(96);
     expect(new Measurement(2.54, 'cm').toPixels()).toBeCloseTo(96);
     expect(new Measurement(1, 'in').toPixels()).toBeCloseTo(96);
   });
 
-  test('changing DPI affects toPixels', () => {
+  it('changing DPI affects toPixels', () => {
     Measurement.setDpiProvider(() => 192);
     expect(new Measurement(1, 'in').toPixels()).toBeCloseTo(192);
   });
 
-  test('arithmetic operations return correct immutable results', () => {
+  it('arithmetic operations return correct immutable results', () => {
     const a = new Measurement(10);
     const b = new Measurement(5);
     const c = a.add(b);
@@ -33,7 +33,7 @@ describe('Measurement', () => {
     expect(f.equals(new Measurement(5))).toBe(true);
   });
 
-  test('comparison works correctly', () => {
+  it('comparison works correctly', () => {
     const a = new Measurement(10);
     const b = new Measurement(15);
     expect(a.compareTo(b)).toBeLessThan(0);
@@ -41,14 +41,14 @@ describe('Measurement', () => {
     expect(a.compareTo(new Measurement(10))).toBe(0);
   });
 
-  test('unit conversion works correctly', () => {
+  it('unit conversion works correctly', () => {
     const m = new Measurement(25.4, 'mm');
     expect(m.toUnit('mm')).toBeCloseTo(25.4);
     expect(m.toUnit('cm')).toBeCloseTo(2.54);
     expect(m.toUnit('in')).toBeCloseTo(1);
   });
 
-  test('factory methods create Measurements correctly', () => {
+  it('factory methods create Measurements correctly', () => {
     const px = Measurement.fromPx(96, 96);
     expect(px.toUnit('in')).toBeCloseTo(1);
 
@@ -56,7 +56,7 @@ describe('Measurement', () => {
     expect(mm.toUnit('mm')).toBeCloseTo(10);
   });
 
-  test('compare alias works', () => {
+  it('compare alias works', () => {
     const a = new Measurement(10);
     const b = new Measurement(20);
     expect(a.compare(b)).toBeLessThan(0);

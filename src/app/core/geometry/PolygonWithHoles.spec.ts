@@ -4,7 +4,7 @@ import Point from './Point';
 import Measurement from '../units/Measurement';
 
 describe('PolygonWithHoles', () => {
-  test('area subtracts holes and contains works', () => {
+  it('area subtracts holes and contains works', () => {
     const outerPts = [
       new Point(new Measurement(0), new Measurement(0)),
       new Point(new Measurement(4), new Measurement(0)),

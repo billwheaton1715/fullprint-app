@@ -34,11 +34,12 @@ export class Rect {
   }
 
   contains(point: Point): boolean {
+    // Compare using .toUnit('mm') for Measurement
     return (
-      point.x >= this.left &&
-      point.x <= this.right &&
-      point.y >= this.top &&
-      point.y <= this.bottom
+      point.x.toUnit('mm') >= this.left &&
+      point.x.toUnit('mm') <= this.right &&
+      point.y.toUnit('mm') >= this.top &&
+      point.y.toUnit('mm') <= this.bottom
     );
   }
 }

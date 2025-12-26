@@ -4,7 +4,7 @@ import Measurement from '../units/Measurement';
 import Angle from '../units/Angle';
 
 describe('Arc', () => {
-  test('area, perimeter, translate, rotate, toJson', () => {
+  it('area, perimeter, translate, rotate, toJson', () => {
     const a = new Arc(new Point(new Measurement(0), new Measurement(0)), new Measurement(10), new Angle(0, 'rad'), new Angle(Math.PI / 2, 'rad'));
     expect(a.area().toUnit('mm')).toBeCloseTo(0.5 * 10 * 10 * (Math.PI / 2));
     expect(a.perimeter().toUnit('mm')).toBeCloseTo(10 * (Math.PI / 2));

@@ -1,4 +1,7 @@
 import { Rect } from './Rect';
+import Point from './Point';
+import Measurement from '../units/Measurement';
+import Unit from '../units/Unit';
 
 describe('Rect', () => {
   it('constructs with valid dimensions', () => {
@@ -18,8 +21,9 @@ describe('Rect', () => {
   it('detects point containment', () => {
     const r = new Rect(0, 0, 10, 10);
 
-    expect(r.contains({ x: 5, y: 5 })).toBe(true);
-    expect(r.contains({ x: -1, y: 5 })).toBe(false);
-    expect(r.contains({ x: 5, y: 11 })).toBe(false);
+    // Use Point instances for type safety
+    expect(r.contains(new Point(new Measurement(5, Unit.MM), new Measurement(5, Unit.MM)))).toBe(true);
+    expect(r.contains(new Point(new Measurement(-1, Unit.MM), new Measurement(5, Unit.MM)))).toBe(false);
+    expect(r.contains(new Point(new Measurement(5, Unit.MM), new Measurement(11, Unit.MM)))).toBe(false);
   });
 });

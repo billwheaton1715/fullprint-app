@@ -37,4 +37,25 @@ export class CanvasViewport {
     // Set full transform including devicePixelRatio to map world->device pixels
     ctx.setTransform(this.scale * dpr, 0, 0, this.scale * dpr, this.offsetX * dpr, this.offsetY * dpr);
   }
+
+  /**
+   * Convert screen (CSS) coordinates to world `Measurement` coordinates.
+   * Returns an object with Measurements in mm.
+   */
+  screenToWorld(sx: number, sy: number) {
+    const worldPxX = (sx - this.offsetX) / this.scale;
+    const worldPxY = (sy - this.offsetY) / this.scale;
+    // Measurements expect pixels -> convert px to Measurement
+    // Use Measurement.fromPx when creating Points elsewhere; here we return raw px pair
+    return { xPx: worldPxX, yPx: worldPxY };
+  }
+
+  /**
+   * Convert a world point expressed in pixels (px) to screen CSS pixels.
+   */
+  worldToScreen(wxPx: number, wyPx: number) {
+    const sx = wxPx * this.scale + this.offsetX;
+    const sy = wyPx * this.scale + this.offsetY;
+    return { xPx: sx, yPx: sy };
+  }
 }

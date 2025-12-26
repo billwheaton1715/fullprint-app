@@ -4,7 +4,7 @@ import Point from './Point';
 import Measurement from '../units/Measurement';
 
 describe('Shapes', () => {
-  test('Circle area, perimeter, translate, equals', () => {
+  it('Circle area, perimeter, translate, equals', () => {
     const c = new Circle(new Point(new Measurement(0), new Measurement(0)), new Measurement(10));
     expect(c.area().toUnit('mm')).toBeCloseTo(Math.PI * 100);
     expect(c.perimeter().toUnit('mm')).toBeCloseTo(2 * Math.PI * 10);
@@ -16,7 +16,7 @@ describe('Shapes', () => {
     expect(c.equals(c)).toBe(true);
   });
 
-  test('Rectangle area, perimeter, translate, equals', () => {
+  it('Rectangle area, perimeter, translate, equals', () => {
     const r = new Rectangle(new Point(new Measurement(0), new Measurement(0)), new Measurement(5), new Measurement(10));
     expect(r.area().toUnit('mm')).toBeCloseTo(50);
     expect(r.perimeter().toUnit('mm')).toBeCloseTo(30);
