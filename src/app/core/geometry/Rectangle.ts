@@ -49,15 +49,17 @@ export class Rectangle extends Shape {
     return new Rectangle(newTl, this.width.multiply(factor), this.height.multiply(factor));
   }
 
-  boundingBox() {
+  /**
+   * Returns this rectangle as its own bounding box.
+   */
+  public override getBoundingBox() {
     return this;
   }
 
-  intersects(other: Shape): boolean {
-    return utils.bboxIntersects(this, other.boundingBox());
-  }
-
-  contains(point: Point): boolean {
+  /**
+   * Returns true if the given point is inside this rectangle (inclusive, world coordinates).
+   */
+  public override containsPoint(point: Point): boolean {
     const x = point.x.toUnit('mm');
     const y = point.y.toUnit('mm');
     const tlx = this.topLeft.x.toUnit('mm');
@@ -65,6 +67,35 @@ export class Rectangle extends Shape {
     const w = this.width.toUnit('mm');
     const h = this.height.toUnit('mm');
     return x >= tlx && x <= tlx + w && y >= tly && y <= tly + h;
+  }
+
+  /**
+   * Returns true if this rectangle intersects the given rectangle (AABB, world coordinates).
+   */
+  public override intersectsRect(rect: Rectangle): boolean {
+    const a = this;
+    const b = rect;
+    const ax0 = a.topLeft.x.toUnit('mm');
+    const ay0 = a.topLeft.y.toUnit('mm');
+    const ax1 = ax0 + a.width.toUnit('mm');
+    const ay1 = ay0 + a.height.toUnit('mm');
+    const bx0 = b.topLeft.x.toUnit('mm');
+    const by0 = b.topLeft.y.toUnit('mm');
+    const bx1 = bx0 + b.width.toUnit('mm');
+    const by1 = by0 + b.height.toUnit('mm');
+    return ax0 < bx1 && ax1 > bx0 && ay0 < by1 && ay1 > by0;
+  }
+
+  // Legacy wrappers for compatibility
+  public boundingBox() {
+    return this.getBoundingBox();
+  }
+  public contains(point: Point): boolean {
+    return this.containsPoint(point);
+  }
+  public intersects(other: Shape): boolean {
+    // Use bounding box intersection for legacy
+    return this.getBoundingBox().intersectsRect(other.getBoundingBox());
   }
 
   toSvg(): string {

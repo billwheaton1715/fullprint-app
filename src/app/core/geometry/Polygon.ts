@@ -46,16 +46,37 @@ export class Polygon extends Shape {
     return new Polygon(this.points.map(p => utils.scalePoint(p, factor, origin)));
   }
 
-  boundingBox() {
+  /**
+   * Returns the axis-aligned bounding box of this polygon in world coordinates.
+   */
+  public override getBoundingBox() {
     return utils.boundingBoxFromPoints(this.points);
   }
 
-  intersects(other: Shape): boolean {
-    return utils.bboxIntersects(this.boundingBox(), other.boundingBox());
+  /**
+   * Returns true if the given point is inside this polygon (world coordinates).
+   */
+  public override containsPoint(point: Point): boolean {
+    return utils.pointInPolygon(point, this.points);
   }
 
-  contains(point: Point): boolean {
-    return utils.pointInPolygon(point, this.points);
+  /**
+   * Returns true if this polygon's bounding box intersects the given rectangle (AABB, world coordinates).
+   */
+  public override intersectsRect(rect: import('./Rectangle').Rectangle): boolean {
+    return this.getBoundingBox().intersectsRect(rect);
+  }
+
+  // Legacy wrappers for compatibility
+  public boundingBox() {
+    return this.getBoundingBox();
+  }
+  public contains(point: Point): boolean {
+    return this.containsPoint(point);
+  }
+  public intersects(other: Shape): boolean {
+    // Use bounding box intersection for legacy
+    return this.getBoundingBox().intersectsRect(other.getBoundingBox());
   }
 
   toSvg(): string {

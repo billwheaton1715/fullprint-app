@@ -6,6 +6,23 @@ import Angle from '../units/Angle';
 import utils from './utils';
 
 export class PolygonWithHoles extends Shape {
+    // Canonical API wrappers for compatibility
+    override getBoundingBox() {
+      return this.outer.getBoundingBox();
+    }
+
+    override containsPoint(point: Point): boolean {
+      if (!this.outer.containsPoint(point)) return false;
+      for (const h of this.holes) if (h.containsPoint(point)) return false;
+      return true;
+    }
+
+    override intersectsRect(rect: any): boolean {
+      if (typeof rect.intersects === 'function') {
+        return this.intersects(rect);
+      }
+      return utils.bboxIntersects(this.getBoundingBox(), rect);
+    }
   readonly outer: Polygon;
   readonly holes: Polygon[];
 
@@ -40,16 +57,16 @@ export class PolygonWithHoles extends Shape {
   }
 
   boundingBox() {
-    return this.outer.boundingBox();
+    return this.outer.getBoundingBox();
   }
 
   intersects(other: Shape): boolean {
-    return utils.bboxIntersects(this.boundingBox(), other.boundingBox());
+    return utils.bboxIntersects(this.getBoundingBox(), other.getBoundingBox());
   }
 
   contains(point: Point): boolean {
-    if (!this.outer.contains(point)) return false;
-    for (const h of this.holes) if (h.contains(point)) return false;
+    if (!this.outer.containsPoint(point)) return false;
+    for (const h of this.holes) if (h.containsPoint(point)) return false;
     return true;
   }
 

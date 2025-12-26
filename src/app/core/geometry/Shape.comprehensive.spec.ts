@@ -331,8 +331,8 @@ describe('Shape Comprehensive Test Suite', () => {
         new Measurement(10),
         new Measurement(10)
       );
-      expect(r.contains(new Point(new Measurement(5), new Measurement(5)))).toBe(true);
-      expect(r.contains(new Point(new Measurement(11), new Measurement(5)))).toBe(false);
+      expect(r.containsPoint(new Point(new Measurement(5), new Measurement(5)))).toBe(true);
+      expect(r.containsPoint(new Point(new Measurement(11), new Measurement(5)))).toBe(false);
     });
 
     it('boundingBox returns self', () => {
@@ -341,7 +341,7 @@ describe('Shape Comprehensive Test Suite', () => {
         new Measurement(5),
         new Measurement(3)
       );
-      const bbox = r.boundingBox();
+      const bbox = r.getBoundingBox();
       expect(bbox).toBe(r);
     });
 
@@ -495,8 +495,8 @@ describe('Shape Comprehensive Test Suite', () => {
         new Point(new Measurement(0), new Measurement(4)),
       ];
       const p = new Polygon(pts);
-      expect(p.contains(new Point(new Measurement(2), new Measurement(2)))).toBe(true);
-      expect(p.contains(new Point(new Measurement(5), new Measurement(2)))).toBe(false);
+      expect(p.containsPoint(new Point(new Measurement(2), new Measurement(2)))).toBe(true);
+      expect(p.containsPoint(new Point(new Measurement(5), new Measurement(2)))).toBe(false);
     });
 
     it('toJson serializes all points', () => {
@@ -950,7 +950,7 @@ describe('Shape Comprehensive Test Suite', () => {
         new Point(new Measurement(6), new Measurement(6)),
         new Point(new Measurement(2), new Measurement(6)),
       ]);
-      expect(p1.intersects(p2)).toBe(true);
+      expect(p1.intersectsRect(p2.getBoundingBox())).toBe(true);
     });
 
     it('chain transformations preserve immutability', () => {

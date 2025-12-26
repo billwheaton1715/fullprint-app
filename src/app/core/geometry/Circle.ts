@@ -6,6 +6,21 @@ import utils from './utils';
 import Rectangle from './Rectangle';
 
 export class Circle extends Shape {
+    // Canonical API wrappers for compatibility
+    override getBoundingBox() {
+      return this.boundingBox();
+    }
+
+    override containsPoint(point: Point): boolean {
+      return this.contains(point);
+    }
+
+    override intersectsRect(rect: any): boolean {
+      if (typeof rect.intersects === 'function') {
+        return this.intersects(rect);
+      }
+      return utils.bboxIntersects(this.getBoundingBox(), rect);
+    }
   readonly center: Point;
   readonly radius: Measurement;
 
@@ -50,7 +65,7 @@ export class Circle extends Shape {
   }
 
   intersects(other: Shape): boolean {
-    return utils.bboxIntersects(this.boundingBox(), other.boundingBox());
+    return utils.bboxIntersects(this.getBoundingBox(), other.getBoundingBox());
   }
 
   contains(point: Point): boolean {

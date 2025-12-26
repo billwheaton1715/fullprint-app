@@ -71,8 +71,8 @@ describe('CanvasTabComponent group selection and transformations', () => {
     const up = new PointerEvent('pointerup', { clientX: 30, clientY: 15, pointerId, buttons: 0 });
     window.dispatchEvent(up);
 
-    expect(comp.selectedShapes.length).toBe(1);
-    expect([r1, r2]).toContain(comp.selectedShapes[0]);
+    expect(comp.selectedShapes.length).toBe(2);
+    expect(comp.selectedShapes).toEqual(jasmine.arrayContaining([r1, r2]));
     expect((comp as any)._dragSelectRect).toBeNull();
   });
 

@@ -1,3 +1,8 @@
+// SelectionOperation model for clarity and future-proofing
+type SelectionOperation =
+  | { type: 'replace'; shapes: any[] }
+  | { type: 'add'; shapes: any[] }
+  | { type: 'toggle'; shapes: any[] };
 /**
  * CanvasTabComponent
  *
@@ -61,7 +66,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
   @Input() showBoundingBoxes = false;
   @Input() showGrid = false;
 
-  private viewport = new CanvasViewport({ scale: 1, offsetX: 0, offsetY: 0 });
+  private viewport = new CanvasViewport();
   private _mounted = false;
 
   hoveredShape: any | null = null;
@@ -81,6 +86,30 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
   ) = null;
 
   constructor(private renderer: CanvasRendererService) {}
+
+  /**
+   * Centralized selection operation application.
+   * All selection changes must go through this method.
+   */
+  private applySelectionOperation(op: SelectionOperation) {
+    switch (op.type) {
+      case 'replace':
+        this.selectedShapes = op.shapes.slice();
+        break;
+      case 'add':
+        for (const s of op.shapes) {
+          if (!this.selectedShapes.includes(s)) this.selectedShapes.push(s);
+        }
+        break;
+      case 'toggle':
+        for (const s of op.shapes) {
+          const idx = this.selectedShapes.indexOf(s);
+          if (idx >= 0) this.selectedShapes.splice(idx, 1);
+          else this.selectedShapes.push(s);
+        }
+        break;
+    }
+  }
 
   ngOnInit(): void {}
 
@@ -139,7 +168,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
       let hit = null;
       for (let i = this.shapes.length - 1; i >= 0; i--) {
         const s = this.shapes[i];
-        try { if (s && typeof s.contains === 'function' && s.contains(p)) { hit = s; break; } } catch {}
+        try { if (s && typeof s.getBoundingBox === 'function' && s.containsPoint(p)) { hit = s; break; } } catch {}
       }
       if (hit && this.selectedShapes.includes(hit)) {
         this.activeInteraction = {
@@ -211,25 +240,52 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
     if (this.activeInteraction) {
       if (this.activeInteraction.type === 'drag-select') {
         const rect = this.activeInteraction;
-        const xMin = Math.min(rect.x0, rect.x1);
-        const xMax = Math.max(rect.x0, rect.x1);
-        const yMin = Math.min(rect.y0, rect.y1);
-        const yMax = Math.max(rect.y0, rect.y1);
-        const tl = this.viewport.screenToWorld(xMin, yMin);
-        const br = this.viewport.screenToWorld(xMax, yMax);
-        this.selectedShapes = this.shapes.filter(s => {
-          if (s && typeof s.boundingBox === 'function') {
-            const bb = s.boundingBox();
-            return (
-              bb.topLeft.x.toUnit('px') < br.xPx &&
-              bb.topLeft.x.toUnit('px') + bb.width.toUnit('px') > tl.xPx &&
-              bb.topLeft.y.toUnit('px') < br.yPx &&
-              bb.topLeft.y.toUnit('px') + bb.height.toUnit('px') > tl.yPx
-            );
+        // Only construct Rectangle if drag distance is nonzero
+        if (rect.x0 !== rect.x1 && rect.y0 !== rect.y1) {
+          const xMin = Math.min(rect.x0, rect.x1);
+          const xMax = Math.max(rect.x0, rect.x1);
+          const yMin = Math.min(rect.y0, rect.y1);
+          const yMax = Math.max(rect.y0, rect.y1);
+          const tl = this.viewport.screenToWorld(xMin, yMin);
+          const br = this.viewport.screenToWorld(xMax, yMax);
+          const wxMin = Math.min(tl.xPx, br.xPx);
+          const wxMax = Math.max(tl.xPx, br.xPx);
+          const wyMin = Math.min(tl.yPx, br.yPx);
+          const wyMax = Math.max(tl.yPx, br.yPx);
+          const dragRect = new Rectangle(
+            new Point(Measurement.fromPx(wxMin), Measurement.fromPx(wyMin)),
+            new Measurement(wxMax - wxMin, 'mm'),
+            new Measurement(wyMax - wyMin, 'mm')
+          );
+          const shapes = this.shapes.filter(s =>
+            s && typeof s.getBoundingBox === 'function' && s.intersectsRect(dragRect)
+          );
+          this.applySelectionOperation({ type: 'replace', shapes });
+          this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
+        } else {
+          // Treat zero-drag as click: select shape under pointer
+          const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
+          const world = this.viewport.screenToWorld(sx, sy);
+          const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
+          let found = null;
+          for (let i = this.shapes.length - 1; i >= 0; i--) {
+            const s = this.shapes[i];
+            try {
+              if (s && typeof s.containsPoint === 'function' && s.containsPoint(p)) {
+                found = s;
+                break;
+              }
+            } catch {}
           }
-          return false;
-        });
-        this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
+          if (e.shiftKey) {
+            if (found) {
+              this.applySelectionOperation({ type: 'toggle', shapes: [found] });
+            }
+          } else {
+            this.applySelectionOperation({ type: 'replace', shapes: found ? [found] : [] });
+          }
+          this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
+        }
         // For test compatibility: set _dragSelectRect to null so tests expecting this property pass
         (this as any)._dragSelectRect = null;
       }
@@ -250,17 +306,20 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
     let found = null;
     for (let i = this.shapes.length - 1; i >= 0; i--) {
       const s = this.shapes[i];
-      try { if (s && typeof s.contains === 'function' && s.contains(p)) { found = s; break; } } catch {}
+      try {
+        if (s && typeof s.containsPoint === 'function' && s.containsPoint(p)) {
+          found = s;
+          break;
+        }
+      } catch {}
     }
 
     if (e.shiftKey) {
       if (found) {
-        const idx = this.selectedShapes.indexOf(found);
-        if (idx >= 0) this.selectedShapes.splice(idx, 1);
-        else this.selectedShapes.push(found);
+        this.applySelectionOperation({ type: 'toggle', shapes: [found] });
       }
     } else {
-      this.selectedShapes = found ? [found] : [];
+      this.applySelectionOperation({ type: 'replace', shapes: found ? [found] : [] });
     }
 
     this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
