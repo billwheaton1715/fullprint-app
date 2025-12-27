@@ -11,7 +11,12 @@ export class Point {
   }
 
   translate(dx: Measurement, dy: Measurement): Point {
-    return new Point(this.x.add(dx), this.y.add(dy));
+    if (!(dx instanceof Object && 'valueMm' in dx) || !(dy instanceof Object && 'valueMm' in dy)) {
+      throw new Error(`[Point.translate] dx and dy must be Measurement instances. Got: dx=${JSON.stringify(dx)}, dy=${JSON.stringify(dy)}`);
+    }
+    const newX = this.x.add(dx);
+    const newY = this.y.add(dy);
+    return new Point(newX, newY);
   }
 
   distanceTo(other: Point): Measurement {

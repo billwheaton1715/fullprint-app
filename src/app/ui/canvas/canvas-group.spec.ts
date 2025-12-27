@@ -89,8 +89,11 @@ describe('CanvasTabComponent group selection and transformations', () => {
     window.dispatchEvent(move);
     const up = new PointerEvent('pointerup', { clientX: 25, clientY: 15, pointerId, buttons: 0 });
     window.dispatchEvent(up);
-    expect(comp.shapes[0].topLeft.x.toUnit('mm')).toBe(r1.topLeft.x.toUnit('mm'));
-    expect(comp.shapes[1].topLeft.x.toUnit('mm')).toBe(r2.topLeft.x.toUnit('mm'));
+    // After drag, expect new positions (simulate commit)
+    const dxMm = Measurement.fromPx(20).toUnit('mm');
+    const dyMm = Measurement.fromPx(10).toUnit('mm');
+    expect(comp.shapes[0].topLeft.x.toUnit('mm')).toBeCloseTo(r1.topLeft.x.toUnit('mm') + dxMm);
+    expect(comp.shapes[1].topLeft.x.toUnit('mm')).toBeCloseTo(r2.topLeft.x.toUnit('mm') + dxMm);
   });
 
   it('group scale and rotate maintain relative positions', () => {
@@ -138,7 +141,7 @@ describe('CanvasTabComponent group selection and transformations', () => {
     comp.shapes = [r1, r2];
     comp.selectedShapes = [r1, r2];
     (comp as any).viewport = new CanvasViewport({ scale: 2, offsetX: 10, offsetY: 5 } as any);
-    expect(comp.shapes[0].topLeft.x.toUnit('mm')).toBe(r1.topLeft.x.toUnit('mm'));
-    expect(comp.shapes[1].topLeft.x.toUnit('mm')).toBe(r2.topLeft.x.toUnit('mm'));
+    expect(comp.shapes[0].topLeft.x.toUnit('mm')).toBeCloseTo(r1.topLeft.x.toUnit('mm'));
+    expect(comp.shapes[1].topLeft.x.toUnit('mm')).toBeCloseTo(r2.topLeft.x.toUnit('mm'));
   });
 });

@@ -31,7 +31,11 @@ export class Rectangle extends Shape {
   }
 
   translate(dx: Measurement, dy: Measurement): Rectangle {
-    return new Rectangle(this.topLeft.translate(dx, dy), this.width, this.height);
+    if (!(dx instanceof Object && 'valueMm' in dx) || !(dy instanceof Object && 'valueMm' in dy)) {
+      throw new Error(`[Rectangle.translate] dx and dy must be Measurement instances. Got: dx=${JSON.stringify(dx)}, dy=${JSON.stringify(dy)}`);
+    }
+    const newTopLeft = this.topLeft.translate(dx, dy);
+    return new Rectangle(newTopLeft, this.width, this.height);
   }
 
   rotate(angle: Angle, origin: Point): Rectangle {

@@ -96,7 +96,18 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
     if (previewOnly) return newShapes;
 
     this.shapes = newShapes;
-    // Do not rebind selectedShapes; preserve references for test compatibility
+    // Rebind selectedShapes to new shape instances by index
+    this.selectedShapes = this.selectedShapes.map(sel => {
+      const idx = targets.indexOf(sel);
+      if (idx !== -1) {
+        // Find the corresponding new shape by index in targets
+        const origIdx = this.shapes.findIndex(s => s === newShapes[targets.indexOf(sel)]);
+        return newShapes[origIdx !== -1 ? origIdx : targets.indexOf(sel)];
+      }
+      // If not in targets, try to find by reference in newShapes
+      const newIdx = newShapes.indexOf(sel);
+      return newIdx !== -1 ? newShapes[newIdx] : sel;
+    });
     return this.shapes;
   }
 
@@ -172,12 +183,26 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
     const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
     const world = this.viewport.screenToWorld(sx, sy);
 
+    // Debug logging removed
+
     if (e.button === 0) {
       const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
       let hit = null;
+      let hitIndex = -1;
       for (let i = this.shapes.length - 1; i >= 0; i--) {
         const s = this.shapes[i];
-        try { if (s && typeof s.getBoundingBox === 'function' && s.containsPoint(p)) { hit = s; break; } } catch {}
+        try {
+          if (s && typeof s.getBoundingBox === 'function' && s.containsPoint(p)) {
+            hit = s;
+            hitIndex = i;
+            break;
+          }
+        } catch (err) {
+          // Debug logging removed
+        }
+      }
+      if (typeof window !== 'undefined') {
+        // Debug logging removed
       }
       if (hit && this.selectedShapes.includes(hit)) {
         // Always set anchor to current world position at pointerdown
@@ -187,6 +212,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
           startWorldX: world.xPx,
           startWorldY: world.yPx
         };
+        // Debug logging removed
       } else {
         this.activeInteraction = {
           type: 'drag-select',
@@ -222,19 +248,40 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
         // Calculate world delta directly from pointer movement
         const scale = this.viewport.getScale();
         const startScreen = this.viewport.worldToScreen(drag.startWorldX, drag.startWorldY);
-        if (typeof window !== 'undefined' && (window as any).DEBUG_DRAG) {
-          console.log('[DEBUG] Drag values:', {
-            sx, sy, startScreen, scale, drag
-          });
+        let dxPx = NaN, dyPx = NaN;
+        let dxMm: Measurement, dyMm: Measurement;
+        const debugVars = { sx, sy, startScreen, scale, drag };
+        if (typeof window !== 'undefined') {
+          // Debug logging removed
         }
-        let dxPx = NaN, dyPx = NaN, dxMm = NaN, dyMm = NaN;
-        if (typeof sx === 'number' && typeof sy === 'number' && typeof startScreen.xPx === 'number' && typeof startScreen.yPx === 'number' && typeof scale === 'number' && isFinite(scale) && scale !== 0) {
-          dxPx = (sx - startScreen.xPx) / scale;
-          dyPx = (sy - startScreen.yPx) / scale;
-          dxMm = Measurement.fromPx(dxPx).toUnit('mm');
-          dyMm = Measurement.fromPx(dyPx).toUnit('mm');
-        } else {
-          console.error('[ERROR] Invalid drag delta input:', { sx, sy, startScreen, scale });
+        // Defensive: check all relevant variables for finiteness
+        if (
+          typeof sx !== 'number' || !isFinite(sx) ||
+          typeof sy !== 'number' || !isFinite(sy) ||
+          !startScreen || typeof startScreen.xPx !== 'number' || !isFinite(startScreen.xPx) ||
+          typeof startScreen.yPx !== 'number' || !isFinite(startScreen.yPx) ||
+          typeof scale !== 'number' || !isFinite(scale) || scale === 0
+        ) {
+          if (typeof window !== 'undefined') {
+            console.error('[ERROR] Invalid drag delta input:', debugVars);
+          }
+          // Render original shapes, skip transform
+          this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
+          return;
+        }
+        dxPx = (sx - startScreen.xPx) / scale;
+        dyPx = (sy - startScreen.yPx) / scale;
+        dxMm = Measurement.fromPx(dxPx);
+        dyMm = Measurement.fromPx(dyPx);
+        if (typeof window !== 'undefined') {
+          // Debug logging removed
+        }
+        if (!dxMm || !dyMm || !Number.isFinite(dxMm.toUnit('mm')) || !Number.isFinite(dyMm.toUnit('mm'))) {
+          if (typeof window !== 'undefined') {
+            console.error('[ERROR] Non-finite dxMm/dyMm in transform:', { dxPx, dyPx, dxMm, dyMm, debugVars });
+          }
+          this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
+          return;
         }
         const targets = (this.selectedShapes.length > 1 && this.selectedShapes.includes(drag.original))
           ? this.selectedShapes
@@ -243,15 +290,6 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
         const preview = this.applyGroupTransform(
           targets,
           s => {
-            if (typeof window !== 'undefined' && (window as any).DEBUG_DRAG) {
-              console.log('[DEBUG] transform dxMm/dyMm:', { dxMm, dyMm });
-            }
-            if (!isFinite(dxMm) || !isFinite(dyMm)) {
-              if (typeof window !== 'undefined' && (window as any).DEBUG_DRAG) {
-                console.error('[ERROR] Non-finite dxMm/dyMm in transform:', { dxMm, dyMm });
-              }
-              return s instanceof Object ? Object.assign(Object.create(Object.getPrototypeOf(s)), s) : s;
-            }
             if (typeof s.translate === 'function') {
               return s.translate(dxMm, dyMm);
             }
@@ -259,20 +297,8 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
           },
           true
         );
-        // Debug output for test diagnosis
-        if (typeof window !== 'undefined' && (window as any).DEBUG_DRAG) {
-          const debugInfo = {
-            sx,
-            sy,
-            dxPx,
-            dyPx,
-            dxMm,
-            dyMm,
-            preview: preview.map((s: any) => s.topLeft ? { x: s.topLeft.x.toUnit('mm'), y: s.topLeft.y.toUnit('mm') } : s)
-          };
-          // Always log during tests if DEBUG_DRAG is set
-          // eslint-disable-next-line no-console
-          console.log('[DEBUG] drag preview:', debugInfo);
+        if (typeof window !== 'undefined') {
+          // Debug logging removed
         }
         this.renderer.render(canvas, preview, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
         return;
@@ -289,15 +315,9 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
   };
 
   private onPointerUp = (e: PointerEvent) => {
-        if (typeof window !== 'undefined' && (window as any).DEBUG_DRAG) {
-          console.log('[DEBUG] PointerUp', {
-            clientX: e.clientX,
-            clientY: e.clientY,
-            pointerId: e.pointerId,
-            button: e.button,
-            selectedShapes: this.selectedShapes.map(s => s && s.topLeft ? { x: s.topLeft.x.toUnit('mm'), y: s.topLeft.y.toUnit('mm') } : s)
-          });
-        }
+    if (typeof window !== 'undefined') {
+      // Debug logging removed
+    }
     const canvas = this.canvasRef.nativeElement;
     canvas.releasePointerCapture?.(e.pointerId);
     if (this.activeInteraction) {
@@ -361,9 +381,9 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
         const dyPx = world.yPx - drag.startWorldY;
 
         if (dxPx !== 0 || dyPx !== 0) {
-          // Convert delta to mm for translation
-          const dxM = Measurement.fromPx(dxPx).toUnit('mm');
-          const dyM = Measurement.fromPx(dyPx).toUnit('mm');
+          // Use Measurement instances for translation (not numbers)
+          const dxM = Measurement.fromPx(dxPx);
+          const dyM = Measurement.fromPx(dyPx);
           const targets = (this.selectedShapes.length > 1 && this.selectedShapes.includes(drag.original))
             ? this.selectedShapes
             : [drag.original];

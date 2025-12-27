@@ -104,8 +104,11 @@ describe('CanvasTabComponent (modern event & geometry)', () => {
     // Move by 40px right, 10px down
     window.dispatchEvent(new PointerEvent('pointermove', { clientX: 60, clientY: 30 }));
     window.dispatchEvent(new PointerEvent('pointerup', { clientX: 60, clientY: 30 }));
-    // The selectedShapes array should still contain the rect (move is preview only)
-    expect(comp.selectedShapes).toContain(rect);
+    // The selectedShapes array should contain the new, moved shape instance (not the original reference)
+    expect(comp.selectedShapes.length).toBe(1);
+    const selected = comp.selectedShapes[0];
+    expect(selected.topLeft.x.toUnit('px')).toBeCloseTo(50, 1); // 10 + 40
+    expect(selected.topLeft.y.toUnit('px')).toBeCloseTo(20, 1); // 10 + 10
   });
 
   it('getGroupBoundingBox returns correct bbox for selection', () => {
