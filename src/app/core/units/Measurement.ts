@@ -11,7 +11,8 @@ export class Measurement {
   // Accept either our `Unit` enum or string literals for compatibility
   constructor(value: number, unit: Unit | 'mm' | 'cm' | 'in' = Unit.MM) {
     if (!Number.isFinite(value) || Number.isNaN(value)) {
-      throw new Error('Measurement value must be a finite number');
+      console.warn('[Measurement] Non-finite value encountered:', value, 'unit:', unit, new Error().stack);
+      value = 0;
     }
 
     // Normalize unit to string

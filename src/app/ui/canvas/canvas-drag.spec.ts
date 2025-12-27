@@ -14,6 +14,7 @@ const PointerEventPolyfill = MouseEvent as any;
 beforeAll(() => {
   HTMLElement.prototype.setPointerCapture = function() {};
   HTMLElement.prototype.releasePointerCapture = function() {};
+  (window as any).DEBUG_DRAG = true;
 });
 
 
