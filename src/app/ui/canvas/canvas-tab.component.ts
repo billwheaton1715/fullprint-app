@@ -61,6 +61,8 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
 
   private viewport = new CanvasViewport();
   private _mounted = false;
+  private viewportWidth = 0;
+  private viewportHeight = 0;
 
   hoveredShape: any | null = null;
   selectedShapes: any[] = [];
@@ -144,6 +146,7 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
     window.addEventListener('pointerup', this.onPointerUp);
     window.addEventListener('resize', this.onResize);
 
+    this.resizeCanvas();
     this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, ctx => this.drawOverlays(ctx));
   }
 
@@ -166,8 +169,23 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
   }
 
   private onResize = () => {
+    this.resizeCanvas();
     this.renderer.render(this.canvasRef.nativeElement, this.shapes, this.viewport, { background: '#fff' }, ctx => this.drawOverlays(ctx));
   };
+
+  private resizeCanvas() {
+    const canvas = this.canvasRef.nativeElement;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    this.viewportWidth = rect.width;
+    this.viewportHeight = rect.height;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+  }
 
   private onWheel = (e: WheelEvent) => {
     e.preventDefault();
