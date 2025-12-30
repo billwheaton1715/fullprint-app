@@ -72,6 +72,15 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
   private _lastX = 0;
   private _lastY = 0;
 
+    // Debug rectangles (render-only, not in state)
+  private static readonly DEBUG_RECT_A = { x: 100, y: 100, width: 120, height: 80 };
+  private static readonly DEBUG_RECT_B = { x: 260, y: 140, width: 120, height: 80 };
+
+  // Pure hit test for a rect
+  private hitTestRect(px: number, py: number, rect: { x: number; y: number; width: number; height: number }): boolean {
+    return px >= rect.x && px <= rect.x + rect.width && py >= rect.y && py <= rect.y + rect.height;
+  }
+
   private activeInteraction: null | (
     { type: 'drag-shape', original: any, startWorldX: number, startWorldY: number }
     | { type: 'drag-select', x0: number, y0: number, x1: number, y1: number }
@@ -438,6 +447,15 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
     const canvas = this.canvasRef.nativeElement;
     const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
     const world = this.viewport.screenToWorld(sx, sy);
+
+    // Debug rectangle hit testing (render-only, logs only)
+    const px = world.xPx;
+    const py = world.yPx;
+    if (this.hitTestRect(px, py, CanvasTabComponent.DEBUG_RECT_A)) {
+      console.log('Rect A hit');
+    } else if (this.hitTestRect(px, py, CanvasTabComponent.DEBUG_RECT_B)) {
+      console.log('Rect B hit');
+    }
 
     const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
 
