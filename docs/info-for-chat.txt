@@ -409,3 +409,9 @@ Not introduce new concepts."
 
 And one thing I hope you can agree to is to let me know if you need a refresher about what the code we are changing.  I notice that after a while, you get lost and that is when you begin to infer.  so let me know if you need to get the latest I have when you make crucial decisions.
 
+--new stuff later on--
+okay, I did all that.
+the single or group items now stay selected after moving.
+But, I can now drag a rectangle that is not selected.  I simply pointer-down, pointer-move, pointer-up.  not gets selected, it just teleports and its done
+
+It is still teleporting, whether selected or not.

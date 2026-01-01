@@ -52,6 +52,7 @@ type SelectionOperation =
 import Measurement from '../../core/units/Measurement';
 import { Point } from '../../core/geometry/Point';
 import { Rectangle } from '../../core/geometry/Rectangle';
+import { Triangle } from '../../core/geometry/Triangle';
 import {
   Component,
   ElementRef,
@@ -106,6 +107,9 @@ export class CanvasTabComponent
   private _lastDragDx: Measurement | null = null;
   private _lastDragDy: Measurement | null = null;
   private _suppressNextClickSelection = false;
+  private _downScreenX: number | null = null;
+  private _downScreenY: number | null = null;
+  private _dragThresholdPx = 4;
 
 
   @Input() showBoundingBoxes = false;
@@ -128,7 +132,7 @@ export class CanvasTabComponent
 
   private activeInteraction: null | (
     | { type: 'drag-shape'; original: Shape; startWorldX: number; startWorldY: number }
-    | { type: 'drag-select'; x0: number; y0: number; x1: number; y1: number }
+    | { type: 'drag-select'; x0: number; y0: number; x1: number; y1: number; shift: boolean }
   ) = null;
 
   constructor(private renderer: CanvasRendererService) {}
@@ -223,6 +227,20 @@ export class CanvasTabComponent
           new Point(Measurement.fromPx(300), Measurement.fromPx(180)),
           Measurement.fromPx(140),
           Measurement.fromPx(90)
+        ),
+
+    // Triangle A
+        new Triangle(
+          new Point(Measurement.fromPx(200), Measurement.fromPx(300)),
+          new Point(Measurement.fromPx(260), Measurement.fromPx(380)),
+          new Point(Measurement.fromPx(140), Measurement.fromPx(380))
+        ),
+
+        // Triangle B
+        new Triangle(
+          new Point(Measurement.fromPx(420), Measurement.fromPx(90)),
+          new Point(Measurement.fromPx(500), Measurement.fromPx(150)),
+          new Point(Measurement.fromPx(380), Measurement.fromPx(150))
         )
       ];
       this.render();
@@ -294,6 +312,9 @@ export class CanvasTabComponent
   private onPointerDown = (e: PointerEvent) => {
     const canvas = this.canvasRef.nativeElement;
     const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
+    this._downScreenX = sx;
+    this._downScreenY = sy;
+
     const world = this.viewport.screenToWorld(sx, sy);
 
     if (e.button === 0) {
@@ -383,7 +404,8 @@ export class CanvasTabComponent
           x0: sx,
           y0: sy,
           x1: sx,
-          y1: sy
+          y1: sy,
+          shift: e.shiftKey
         };
       }
 
@@ -402,6 +424,8 @@ export class CanvasTabComponent
   private onMouseMove = (e: MouseEvent) => {
     const canvas = this.canvasRef.nativeElement;
     const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
+
+
     this._pointerScreenX = sx;
     this._pointerScreenY = sy;
     // 🔑 If we're dragging, pointermove is already driving renders (including previews).
@@ -426,11 +450,17 @@ export class CanvasTabComponent
 
     const canvas = this.canvasRef.nativeElement;
     const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
+    const dx0 = this._downScreenX == null ? 0 : (sx - this._downScreenX);
+    const dy0 = this._downScreenY == null ? 0 : (sy - this._downScreenY);
+    const isPastThreshold = (dx0 * dx0 + dy0 * dy0) >= (this._dragThresholdPx * this._dragThresholdPx);
+
     this._pointerScreenX = sx;
     this._pointerScreenY = sy;
 
     if (this.activeInteraction?.type === 'drag-select') {
+      if (!isPastThreshold) return;
       this._didDrag = true;
+
 
       this.activeInteraction.x1 = sx;
       this.activeInteraction.y1 = sy;
@@ -462,7 +492,9 @@ export class CanvasTabComponent
     }
 
     if (this.activeInteraction?.type === 'drag-shape') {
+      if (!isPastThreshold) return;
       this._didDrag = true;
+
 
       const drag = this.activeInteraction;
 
@@ -503,7 +535,7 @@ export class CanvasTabComponent
       const x1 = Math.max(r.x0, r.x1);
       const y1 = Math.max(r.y0, r.y1);
 
-      this.selectedShapes = this.shapes.filter(s => {
+      const selected = this.shapes.filter(s => {
         const bb = s.getBoundingBox();
         const bx0 = bb.topLeft.x.toUnit('px');
         const by0 = bb.topLeft.y.toUnit('px');
@@ -512,9 +544,16 @@ export class CanvasTabComponent
 
         return !(bx1 < x0 || bx0 > x1 || by1 < y0 || by0 > y1);
       });
+
+      this.applySelectionOperation({
+        type: r.shift ? 'add' : 'replace',
+        shapes: selected
+      });
+
       this._previewShapes = null;
       this.rebuildSelectedIndices();
     }
+
 
     if (this.activeInteraction?.type === 'drag-shape') {
       const drag = this.activeInteraction;
@@ -541,7 +580,9 @@ export class CanvasTabComponent
 
     this.render();
 
-    
+    this._downScreenX = null;
+    this._downScreenY = null;
+
 
   };
 
@@ -567,13 +608,25 @@ export class CanvasTabComponent
     const found =
       [...this.shapes].reverse().find(s => s.containsPoint?.(p)) ?? null;
 
+    if (!found) {
+      // Click on empty: clear selection (but Shift+click empty should preserve selection)
+      if (!e.shiftKey) {
+        this.applySelectionOperation({ type: 'replace', shapes: [] });
+        this.rebuildSelectedIndices();
+        this.render();
+      }
+      return;
+    }
+
     this.applySelectionOperation({
       type: e.shiftKey ? 'toggle' : 'replace',
-      shapes: found ? [found] : []
+      shapes: [found]
     });
 
     this.rebuildSelectedIndices();
     this.render();
+
+
   };
 
 
