@@ -66,6 +66,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CanvasRendererService } from './canvas-renderer.service';
+import { CanvasOverlayRenderer } from './canvas-overlay-renderer';
 import { CanvasViewport } from './canvas-viewport';
 import Shape from '../../core/geometry/Shape';
 
@@ -134,6 +135,8 @@ export class CanvasTabComponent
     | { type: 'drag-shape'; original: Shape; startWorldX: number; startWorldY: number }
     | { type: 'drag-select'; x0: number; y0: number; x1: number; y1: number; shift: boolean }
   ) = null;
+
+  private overlayRenderer = new CanvasOverlayRenderer();
 
   constructor(private renderer: CanvasRendererService) {}
 
@@ -323,33 +326,6 @@ export class CanvasTabComponent
 
       canvas.setPointerCapture?.(e.pointerId);
 
-      // if (hit) {
-      //   // If the hit shape isn't already selected, select it now.
-      //   // (Drag immediately = select + drag, standard editor behavior)
-      //   if (!this.selectedShapes.includes(hit)) {
-      //     this.applySelectionOperation({ type: 'replace', shapes: [hit] });
-      //     this.rebuildSelectedIndices();
-      //   }
-        
-      //   this.activeInteraction = {
-      //     type: 'drag-shape',
-      //     original: hit,
-      //     startWorldX: world.xPx,
-      //     startWorldY: world.yPx
-      //   };
-      //   // reset last drag delta
-      //   this._lastDragDx = null;
-      //   this._lastDragDy = null;        
-      // } else {
-      //   // Only empty space starts drag-select
-      //   this.activeInteraction = {
-      //     type: 'drag-select',
-      //     x0: sx,
-      //     y0: sy,
-      //     x1: sx,
-      //     y1: sy
-      //   };
-      // }
       if (hit) {
         canvas.setPointerCapture?.(e.pointerId);
 
@@ -628,186 +604,33 @@ export class CanvasTabComponent
 
 
   };
-
-
-
-
   public drawOverlays(ctx: CanvasRenderingContext2D) {
     const canvas = this.canvasRef.nativeElement;
-    const { topLeft, bottomRight } = this.viewport.getVisibleWorldRect(canvas);
     const shapesForOverlay: Shape[] = this._previewShapes ?? this.shapes;
-    
-    // Grid
-    if (this.showGrid) {
-      const spacingPx = Measurement.fromMm(1).toUnit('px');
-      const startX = Math.floor(topLeft.xPx / spacingPx) * spacingPx;
-      const endX = Math.ceil(bottomRight.xPx / spacingPx) * spacingPx;
-      const startY = Math.floor(topLeft.yPx / spacingPx) * spacingPx;
-      const endY = Math.ceil(bottomRight.yPx / spacingPx) * spacingPx;
-      ctx.save();
-      ctx.strokeStyle = '#eee';
-      ctx.lineWidth = 1 / (this.viewport.getScale() || 1);
-      for (let x = startX; x <= endX; x += spacingPx) {
-        ctx.beginPath();
-        ctx.moveTo(x, topLeft.yPx - spacingPx);
-        ctx.lineTo(x, bottomRight.yPx + spacingPx);
-        ctx.stroke();
-      }
-      for (let y = startY; y <= endY; y += spacingPx) {
-        ctx.beginPath();
-        ctx.moveTo(topLeft.xPx - spacingPx, y);
-        ctx.lineTo(bottomRight.xPx + spacingPx, y);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
 
-    // Bounding boxes
-    if (this.showBoundingBoxes) {
-      ctx.save();
-      ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = '#888';
-      ctx.lineWidth = 1 / (this.viewport.getScale() || 1);
-      for (const s of shapesForOverlay || []) {
-        try {
-          if (s && typeof s.getBoundingBox === 'function') {
-            const bb = s.getBoundingBox();
-            ctx.strokeRect(bb.topLeft.x.toUnit('px'), bb.topLeft.y.toUnit('px'), bb.width.toUnit('px'), bb.height.toUnit('px'));
-          }
-        } catch {}
-      }
-      ctx.restore();
-    }
-
-    // Selection outlines
-    if (shapesForOverlay && shapesForOverlay.length) {
-      const groupBox = this.getGroupBoundingBox(this._selectedIndices.map(i => shapesForOverlay[i]).filter(Boolean));
-      if (groupBox) {
-        ctx.save();
-        ctx.setLineDash([6, 3]);
-        ctx.strokeStyle = '#0078D7';
-        ctx.lineWidth = 2 / (this.viewport.getScale() || 1);
-        const x = groupBox.topLeft.x.toUnit('px');
-        const y = groupBox.topLeft.y.toUnit('px');
-        const w = groupBox.width.toUnit('px');
-        const h = groupBox.height.toUnit('px');
-        ctx.strokeRect(x, y, w, h);
-
-        const handles = [
-          new Point(Measurement.fromPx(x), Measurement.fromPx(y)),
-          new Point(Measurement.fromPx(x + w / 2), Measurement.fromPx(y)),
-          new Point(Measurement.fromPx(x + w), Measurement.fromPx(y)),
-          new Point(Measurement.fromPx(x + w), Measurement.fromPx(y + h / 2)),
-          new Point(Measurement.fromPx(x + w), Measurement.fromPx(y + h)),
-          new Point(Measurement.fromPx(x + w / 2), Measurement.fromPx(y + h)),
-          new Point(Measurement.fromPx(x), Measurement.fromPx(y + h)),
-          new Point(Measurement.fromPx(x), Measurement.fromPx(y + h / 2))
-        ];
-
-        ctx.fillStyle = '#fff';
-        ctx.strokeStyle = '#0078D7';
-        for (const pt of handles) {
-          ctx.beginPath();
-          ctx.arc(pt.x.toUnit('px'), pt.y.toUnit('px'), 6, 0, 2 * Math.PI);
-          ctx.fill();
-          ctx.stroke();
-        }
-
-        const rotHandle = new Point(Measurement.fromPx(x + w / 2), Measurement.fromPx(y - 24));
-        ctx.beginPath();
-        ctx.arc(rotHandle.x.toUnit('px'), rotHandle.y.toUnit('px'), 7, 0, 2 * Math.PI);
-        ctx.fillStyle = '#ffe';
-        ctx.strokeStyle = '#f80';
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      ctx.save();
-      ctx.strokeStyle = '#ff0000';
-      ctx.lineWidth = 2 / (this.viewport.getScale() || 1);
-      this._selectedIndices.forEach(i => {
-        const s = shapesForOverlay[i];
-        if (!s) return;
-        try { s.toCanvas(ctx); } catch {}
-      });
-
-
-      ctx.restore();
-    }
-    const isDragging = this.activeInteraction?.type === 'drag-shape' || this.activeInteraction?.type === 'drag-select';
-    if (!isDragging && this.hoveredShape && (!this.selectedShapes || !this.selectedShapes.includes(this.hoveredShape))) {
-      if (this.hoveredShape && (!this.selectedShapes || !this.selectedShapes.includes(this.hoveredShape))) {
-        ctx.save();
-        ctx.strokeStyle = '#00aaff';
-        ctx.lineWidth = 1 / (this.viewport.getScale() || 1);
-        try { this.hoveredShape.toCanvas(ctx); } catch {}
-        ctx.restore();
-      }
-    }
-
-    // Draw drag-select rectangle if active
-    if (this.activeInteraction && this.activeInteraction.type === 'drag-select') {
-      ctx.save();
-      ctx.strokeStyle = '#0078D7';
-      ctx.setLineDash([4, 2]);
-      ctx.lineWidth = 1.5 / (this.viewport.getScale() || 1);
-      const r = this.activeInteraction;
-      ctx.strokeRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
-      ctx.restore();
-    }
-
-    if (this._pointerScreenX != null && this._pointerScreenY != null) {
-      const world = this.viewport.screenToWorld(this._pointerScreenX, this._pointerScreenY);
-      const wx = world.xPx;
-      const wy = world.yPx;
-      ctx.save();
-      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-      ctx.lineWidth = 1 / (this.viewport.getScale() || 1);
-      const snapX = Math.round(wx);
-      const snapY = Math.round(wy);
-      ctx.beginPath();
-      ctx.moveTo(snapX, topLeft ? topLeft.yPx - 10000 : -10000);
-      ctx.lineTo(snapX, bottomRight ? bottomRight.yPx + 10000 : 10000);
-      ctx.moveTo(topLeft ? topLeft.xPx - 10000 : -10000, snapY);
-      ctx.lineTo(bottomRight ? bottomRight.xPx + 10000 : 10000, snapY);
-      ctx.stroke();
-      ctx.restore();
-    }
+    this.overlayRenderer.draw(ctx, canvas, {
+      viewport: this.viewport,
+      shapesForOverlay,
+      selectedIndices: this._selectedIndices,
+      hoveredShape: this.hoveredShape,
+      pointerScreen:
+        this._pointerScreenX != null && this._pointerScreenY != null
+          ? { sx: this._pointerScreenX, sy: this._pointerScreenY }
+          : null,
+      showGrid: this.showGrid,
+      showBoundingBoxes: this.showBoundingBoxes,
+      dragSelectRect:
+        this.activeInteraction?.type === 'drag-select'
+          ? { x0: this.activeInteraction.x0, y0: this.activeInteraction.y0, x1: this.activeInteraction.x1, y1: this.activeInteraction.y1 }
+          : null
+    });
   }
-  public getGroupBoundingBox(shapes: Shape[]): Rectangle | null {
-    if (!shapes || shapes.length === 0) return null;
-
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-    for (const s of shapes) {
-      if (s) {
-        const bb = s.getBoundingBox();
-        const x = bb.topLeft.x.toUnit('px');
-        const y = bb.topLeft.y.toUnit('px');
-        const w = bb.width.toUnit('px');
-        const h = bb.height.toUnit('px');
-        minX = Math.min(minX, x);
-        minY = Math.min(minY, y);
-        maxX = Math.max(maxX, x + w);
-        maxY = Math.max(maxY, y + h);
-      }
-    }
-
-    if (minX === Infinity) return null;
-
-    return new Rectangle(
-      new Point(Measurement.fromPx(minX), Measurement.fromPx(minY)),
-      Measurement.fromPx(maxX - minX),
-      Measurement.fromPx(maxY - minY)
-    );
-  }  
-
   private rebuildSelectedIndices() {
     this._selectedIndices = this.selectedShapes
       .map(s => this.shapes.indexOf(s))
       .filter(i => i !== -1);
   }
+
   private updateHoverFromPointer() {
     if (this._pointerScreenX == null || this._pointerScreenY == null) {
       this.hoveredShape = null;
