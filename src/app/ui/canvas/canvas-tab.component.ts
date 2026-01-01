@@ -67,7 +67,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { CanvasRendererService } from './canvas-renderer.service';
 import { CanvasOverlayRenderer } from './canvas-overlay-renderer';
-import { CanvasSelectionModel, SelectionOperation } from './canvas-selection-model';
+import { CanvasSelectionModel} from './canvas-selection-model';
 
 import { CanvasViewport } from './canvas-viewport';
 import Shape from '../../core/geometry/Shape';
@@ -105,6 +105,8 @@ export class CanvasTabComponent
 
   @Input() shapes: any[] = [];
   private _previewShapes: Shape[] | null = null;
+  private _previewSelectedIndices: number[] | null = null;
+
   private _didDrag = false;
   private _lastDragDx: Measurement | null = null;
   private _lastDragDy: Measurement | null = null;
@@ -302,7 +304,7 @@ export class CanvasTabComponent
       canvas.setPointerCapture?.(e.pointerId);
 
       if (hit) {
-        canvas.setPointerCapture?.(e.pointerId);
+//        canvas.setPointerCapture?.(e.pointerId);
 
         // SHIFT behavior: toggle immediately on pointerdown (and skip click handler)
         if (e.shiftKey) {
@@ -347,9 +349,10 @@ export class CanvasTabComponent
         this._lastDragDx = null;
         this._lastDragDy = null;
       } else {
-        canvas.setPointerCapture?.(e.pointerId);
+//        canvas.setPointerCapture?.(e.pointerId);
+        this._previewSelectedIndices = null;
 
-        // Only empty space starts drag-select
+        // Only empty space starts drag-select        
         this.activeInteraction = {
           type: 'drag-select',
           x0: sx,
@@ -396,6 +399,14 @@ export class CanvasTabComponent
   private onPointerMove = (e: PointerEvent) => {
     //console.log('pointermove', this.activeInteraction?.type);
 
+     if (this._isPanning) {
+      this.viewport.panBy(e.clientX - this._lastX, e.clientY - this._lastY);
+      this._lastX = e.clientX;
+      this._lastY = e.clientY;
+      this.render();
+      return
+    }
+
     if (!this.activeInteraction) return;
 
     const canvas = this.canvasRef.nativeElement;
@@ -432,11 +443,12 @@ export class CanvasTabComponent
       });
 
       this._previewShapes = this.shapes;
-      this.selection.selectedIndices = previewSelected
+      this._previewSelectedIndices = previewSelected
         .map(s => this.shapes.indexOf(s))
         .filter(i => i !== -1);
 
       this.render();
+      
 
       return;
     }
@@ -466,12 +478,7 @@ export class CanvasTabComponent
     }
 
 
-    if (this._isPanning) {
-      this.viewport.panBy(e.clientX - this._lastX, e.clientY - this._lastY);
-      this._lastX = e.clientX;
-      this._lastY = e.clientY;
-      this.render();
-    }
+
   };
 
   private onPointerUp = (e: PointerEvent) => {
@@ -501,7 +508,9 @@ export class CanvasTabComponent
       });
 
       this._previewShapes = null;
+      this._previewSelectedIndices = null;
       this.selection.syncIndices(this.shapes);
+      
     }
 
 
@@ -520,6 +529,7 @@ export class CanvasTabComponent
       this._lastDragDx = null;
       this._lastDragDy = null;
       this._previewShapes = null;
+      this._previewSelectedIndices = null;
       this.selection.syncIndices(this.shapes);
     }
 
@@ -585,7 +595,7 @@ export class CanvasTabComponent
     this.overlayRenderer.draw(ctx, canvas, {
       viewport: this.viewport,
       shapesForOverlay,
-      selectedIndices: this.selection.selectedIndices,
+      selectedIndices: this._previewSelectedIndices ?? this.selection.selectedIndices,
       hoveredShape: this.hoveredShape,
       pointerScreen:
         this._pointerScreenX != null && this._pointerScreenY != null
