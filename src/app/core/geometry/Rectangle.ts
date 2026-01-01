@@ -5,7 +5,7 @@ import Angle from '../units/Angle';
 import utils from './utils';
 
 export class Rectangle extends Shape {
-  readonly topLeft: Point;
+  private readonly _topLeft: Point;
   readonly width: Measurement;
   readonly height: Measurement;
 
@@ -14,9 +14,12 @@ export class Rectangle extends Shape {
     if (width.compareTo(new Measurement(0)) <= 0 || height.compareTo(new Measurement(0)) <= 0) {
       throw new Error('Width and height must be positive');
     }
-    this.topLeft = topLeft;
+    this._topLeft = topLeft;
     this.width = width;
     this.height = height;
+  }
+  override get topLeft(): Point {
+    return this._topLeft;
   }
 
   area(): Measurement {

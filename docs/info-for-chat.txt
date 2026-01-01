@@ -1,0 +1,411 @@
+Here are the responses to your request for info.  I am keeping them in a file in the docs folder named info-for-chat, so we can refer to them later if needed.
+
+Response for request item 1, The current CanvasTabComponent skeleton (trimmed)
+class fields (properties):
+  
+  @ViewChild('canvasEl', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('host', { static: true }) hostRef!: ElementRef<HTMLDivElement>;
+
+  @Input() shapes: any[] = [];
+  @Input() showBoundingBoxes = false;
+  @Input() showGrid = false;
+
+  private viewport = new CanvasViewport();
+  private _mounted = false;
+
+  // note, these two have no accessor like private or public, etc.
+  hoveredShape: Shape | null = null;
+  selectedShapes: Shape[] = [];
+
+  private _pointerScreenX: number | null = null;
+  private _pointerScreenY: number | null = null;
+
+  private _isPanning = false;
+  private _lastX = 0;
+  private _lastY = 0;
+
+  private resizeObserver?: ResizeObserver;
+
+  private activeInteraction: null | (
+    | { type: 'drag-shape'; original: Shape; startWorldX: number; startWorldY: number }
+    | { type: 'drag-select'; x0: number; y0: number; x1: number; y1: number }
+  ) = null;
+
+constructor:
+
+  constructor(private renderer: CanvasRendererService) {}
+
+
+existing pointer / mouse handlers (whatever they’re called now)
+There are several of these:
+
+  private onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, this.canvasRef.nativeElement);
+    this.viewport.zoomAt(delta, sx, sy);
+    this.render();
+  };
+
+  private onPointerDown = (e: PointerEvent) => {
+    const canvas = this.canvasRef.nativeElement;
+    const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
+    const world = this.viewport.screenToWorld(sx, sy);
+
+    if (e.button === 0) {
+      const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
+      const hit = [...this.shapes].reverse().find(s => s.containsPoint?.(p)) ?? null;
+
+      canvas.setPointerCapture?.(e.pointerId);
+
+      if (hit && this.selectedShapes.includes(hit)) {
+        this.activeInteraction = {
+          type: 'drag-shape',
+          original: hit,
+          startWorldX: world.xPx,
+          startWorldY: world.yPx
+        };
+      } else {
+        this.activeInteraction = { type: 'drag-select', x0: sx, y0: sy, x1: sx, y1: sy };
+      }
+    }
+
+    if (e.button === 1) {
+      this._isPanning = true;
+      this._lastX = e.clientX;
+      this._lastY = e.clientY;
+    }
+  };
+
+  private onMouseMove = (e: MouseEvent) => {
+    const canvas = this.canvasRef.nativeElement;
+    const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
+    this._pointerScreenX = sx;
+    this._pointerScreenY = sy;
+
+    const world = this.viewport.screenToWorld(sx, sy);
+    const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
+
+    this.hoveredShape =
+      [...this.shapes].reverse().find(s => s.containsPoint?.(p)) ?? null;
+
+    this.render();
+  };
+
+  private onPointerMove = (e: PointerEvent) => {
+    const canvas = this.canvasRef.nativeElement;
+
+    if (this.activeInteraction?.type === 'drag-select') {
+      const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
+      this.activeInteraction.x1 = sx;
+      this.activeInteraction.y1 = sy;
+      this.render();
+      return;
+    }
+
+    if (this.activeInteraction?.type === 'drag-shape') {
+      const drag = this.activeInteraction;
+      const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
+      const scale = this.viewport.getScale();
+      const start = this.viewport.worldToScreen(drag.startWorldX, drag.startWorldY);
+      if (!start) return;
+
+      const dx = Measurement.fromPx((sx - start.xPx) / scale);
+      const dy = Measurement.fromPx((sy - start.yPx) / scale);
+
+      const targets =
+        this.selectedShapes.length > 1 && this.selectedShapes.includes(drag.original)
+          ? this.selectedShapes
+          : [drag.original];
+
+      this.render(this.applyGroupTransform(targets, s => s.translate(dx, dy), true));
+      return;
+    }
+
+    if (this._isPanning) {
+      this.viewport.panBy(e.clientX - this._lastX, e.clientY - this._lastY);
+      this._lastX = e.clientX;
+      this._lastY = e.clientY;
+      this.render();
+    }
+  };
+
+  private onPointerUp = (e: PointerEvent) => {
+    this.canvasRef.nativeElement.releasePointerCapture?.(e.pointerId);
+
+    if (this.activeInteraction?.type === 'drag-select') {
+      const r = this.activeInteraction;
+      if (r.x0 !== r.x1 && r.y0 !== r.y1) {
+        const tl = this.viewport.screenToWorld(Math.min(r.x0, r.x1), Math.min(r.y0, r.y1));
+        const br = this.viewport.screenToWorld(Math.max(r.x0, r.x1), Math.max(r.y0, r.y1));
+        const rect = new Rectangle(
+          new Point(Measurement.fromPx(tl.xPx), Measurement.fromPx(tl.yPx)),
+          Measurement.fromPx(br.xPx - tl.xPx),
+          Measurement.fromPx(br.yPx - tl.yPx)
+        );
+        this.applySelectionOperation({
+          type: 'replace',
+          shapes: this.shapes.filter(s => s.intersectsRect?.(rect))
+        });
+      }
+    }
+
+    if (this.activeInteraction?.type === 'drag-shape') {
+      const drag = this.activeInteraction;
+      const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, this.canvasRef.nativeElement);
+      const world = this.viewport.screenToWorld(sx, sy);
+      const dx = Measurement.fromPx(world.xPx - drag.startWorldX);
+      const dy = Measurement.fromPx(world.yPx - drag.startWorldY);
+
+      const targets =
+        this.selectedShapes.length > 1 && this.selectedShapes.includes(drag.original)
+          ? this.selectedShapes
+          : [drag.original];
+
+      this.applyGroupTransform(targets, s => s.translate(dx, dy));
+    }
+
+    this.activeInteraction = null;
+    this._isPanning = false;
+    this.render();
+  };
+
+  private onClick = (e: MouseEvent) => {
+    if (this._isPanning) return;
+
+    const canvas = this.canvasRef.nativeElement;
+    const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
+    const world = this.viewport.screenToWorld(sx, sy);
+    const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
+
+    const found =
+      [...this.shapes].reverse().find(s => s.containsPoint?.(p)) ?? null;
+
+    this.applySelectionOperation({
+      type: e.shiftKey ? 'toggle' : 'replace',
+      shapes: found ? [found] : []
+    });
+
+    this.render();
+  };
+
+
+render() (current version)
+
+  private render(preview?: Shape[]) {
+    // Defensive: Only render if canvasRef and hostRef are available
+    if (!this.canvasRef?.nativeElement || !this.hostRef?.nativeElement) return;
+
+    const canvas = this.canvasRef.nativeElement as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Restore test-expected renderer.render call exactly as before
+    this.renderer.render(
+      canvas,
+      preview ?? this.shapes,
+      this.viewport,
+      { background: '#fff' },
+      ctx => this.drawOverlays(ctx)
+    );
+
+    // Draw crosshairs at the canvas center after all shapes/overlays
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 1;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    ctx.beginPath();
+    ctx.moveTo(0, centerY);
+    ctx.lineTo(canvas.width, centerY);
+    ctx.moveTo(centerX, 0);
+    ctx.lineTo(centerX, canvas.height);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+In addition to that there are other methods in this class:
+  private resizeCanvas()
+  ngOnDestroy()
+  ngOnChanges(changes: SimpleChanges)
+  ngAfterViewInit()
+  ngOnInit()
+  private applySelectionOperation(op: SelectionOperation) 
+  private applyGroupTransform(
+      targets: Shape[],
+      transformFn: (shape: Shape) => Shape,
+      previewOnly = false
+    ): Shape[]
+
+And at the bottom are these two, which are clearly incomplete, and are an example of how you screwed me over with partial code, an that now I don't know how to reconstruct, but might be in git:
+  public drawOverlays(ctx: CanvasRenderingContext2D) {
+    // unchanged from your version
+  }
+
+  public getGroupBoundingBox(): Rectangle | null {
+    // unchanged from your version
+    return null;
+  }
+
+above the class is this type:
+  type SelectionOperation =
+  | { type: 'replace'; shapes: any[] }
+  | { type: 'add'; shapes: any[] }
+  | { type: 'toggle'; shapes: any[] };
+
+Response for request item 2, The renderer contract (interface or usage)
+
+here is the renderer class without the imports or the Injectable decorator.
+Renderer draws shapes using the shape's `toCanvas` method if it has one or otherwise it tries to draw a gray rectangle as a fallback, and applies overlays and viewport transform
+
+export class CanvasRendererService {
+  render(element: HTMLCanvasElement, shapes: any[], viewport?: CanvasViewport, options?: { background?: string }, overlays?: (ctx: CanvasRenderingContext2D) => void) {
+    if (!element) return;
+    const ctx = element.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = element.getBoundingClientRect();
+    const width = Math.max(1, rect.width);
+    const height = Math.max(1, rect.height);
+    // set canvas backing store size
+    element.width = Math.round(width * dpr);
+    element.height = Math.round(height * dpr);
+    element.style.width = `${width}px`;
+    element.style.height = `${height}px`;
+
+    // clear entire backing store
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, element.width, element.height);
+
+    if (options?.background) {
+      ctx.save();
+      ctx.fillStyle = options.background;
+      ctx.fillRect(0, 0, element.width, element.height);
+      ctx.restore();
+    }
+
+    if (viewport) {
+      ctx.save();
+      viewport.applyToContext(ctx, dpr);
+    }
+
+    for (const s of shapes || []) {
+      try {
+        if (s && typeof s.toCanvas === 'function') {
+          s.toCanvas(ctx);
+        } else if (s && s.type) {
+          // best-effort: if serialized, try a simple draw hint
+          ctx.save();
+          ctx.strokeStyle = '#333';
+          ctx.strokeRect(0,0,0,0);
+          ctx.restore();
+        }
+      } catch (e) {
+        // swallow rendering errors for robustness
+        // console.error('render error', e);
+      }
+    }
+    // call overlay callback while transform still applied
+    if (overlays) overlays(ctx);
+
+    if (viewport) ctx.restore();
+  }
+}
+
+Response to request 3. The shape model (minimal)
+
+Shape interface/type
+
+import Measurement from '../units/Measurement';
+import Point from './Point';
+import Angle from '../units/Angle';
+
+export abstract class Shape {
+  abstract area(): Measurement;
+  abstract perimeter(): Measurement;
+  abstract translate(dx: Measurement, dy: Measurement): Shape;
+  abstract rotate(angle: Angle, origin: Point): Shape;
+  abstract scale(factor: number, origin: Point): Shape;
+
+  /**
+   * Returns the axis-aligned bounding box of this shape in world coordinates (AABB).
+   * Canonical: calls boundingBox() if present.
+   */
+  public getBoundingBox(): import('./Rectangle').Rectangle {
+    // @ts-ignore
+    return typeof this.boundingBox === 'function' ? this.boundingBox() : undefined;
+  }
+
+  /**
+   * Convenience accessor for the top-left corner of this shape's bounding box.
+   * Derived canonically from getBoundingBox().
+   */
+  public get topLeft(): Point {
+    const bbox = this.getBoundingBox();
+    return bbox.topLeft;
+  }
+
+  /**
+   * Returns true if the given world-space point is inside this shape.
+   * Canonical: calls contains() if present.
+   */
+  public containsPoint(point: Point): boolean {
+    // @ts-ignore
+    return typeof this.contains === 'function' ? this.contains(point) : false;
+  }
+
+  /**
+   * Returns true if this shape's bounding box intersects the given axis-aligned world rectangle.
+   * Canonical: calls intersects() if present, else AABB bbox intersection.
+   */
+  public intersectsRect(rect: import('./Rectangle').Rectangle): boolean {
+    // @ts-ignore
+    if (typeof this.intersects === 'function') return this.intersects(rect);
+    const bbox = this.getBoundingBox();
+    return bbox.intersectsRect(rect);
+  }
+
+  abstract toSvg(): string;
+  abstract toCanvas(ctx: CanvasRenderingContext2D): void;
+  abstract toJson(): any;
+  abstract equals(other: Shape): boolean;
+}
+
+export default Shape;
+
+
+How position is stored (x/y, bounds, etc.)
+I'm not certain what that means.  Shape is what you see above - it doesn't appear to store anything, though it has some abstract methods that might in a concrete class.
+bounds seem to be handled by `public getBoundingBox(): import('./Rectangle').Rectangle` and depend on the shape to have a boundingBox method.  I assume it can be overridden, or is optional.
+
+Reponse to request 4. One known-good behavioral description (very important)
+At the good point:
+Two or more sample rectangles as representative shapes rendered when the screen is finished loading, that can be easily removed later to be replaced with a "create rectangle" command later. 
+
+Click selects one shape and deselects any others that are currently selected
+
+Shift+click on a second shape after a first shape is selected, selects both. 
+
+Subsequent shift+click on any other shape adds it to the collection of selected shapes 
+
+Selected shapes visually take on the "selected" style outline color. unselected and deselected shapes take on the "unselected" style outline color.
+
+Drag moves selected shapes. Shapes are displayed as they are moving. Shapes have the "selected" style outline color. When they are dropped, they are considered to be stationary again at the new coordinates - "moved" - and the drag/drop operation is thus complete.  Selected items are still selected, just as they were before the drag/drop operation started.
+
+Drag on empty space shows selection box after (or because of) moving the mouse pointer. The subsequent mouse-up or pointer-up adds shapes, that are wholly or partially intersecting the selection box, no matter the direction of the drag.
+
+Crosshairs followed pointer, for now. eventually, the coordinate of the pointer will appear in a bottom of the page status bar, but that is for very much later.
+
+You asked if "Viewport panning worked / didn’t work". It was never tested in the ui.  I am not sure how to initialize it tbh - there is no command mode yet. I assume, that will be coming later though.  For now, for success, it is not necessary.
+
+You said, 
+"One important boundary (for both of us)
+If at any point I don’t know something:
+I will ask
+Not infer
+Not “helpfully” rename
+Not introduce new concepts."
+
+And one thing I hope you can agree to is to let me know if you need a refresher about what the code we are changing.  I notice that after a while, you get lost and that is when you begin to infer.  so let me know if you need to get the latest I have when you make crucial decisions.
+

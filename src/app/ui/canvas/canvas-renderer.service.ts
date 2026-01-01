@@ -52,12 +52,12 @@ export class CanvasRendererService {
     }
 
     // --- DEBUG: Draw two hardcoded rectangles (render-only, not data-driven) ---
-    ctx.save();
-    ctx.strokeStyle = '#444';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(100, 100, 120, 80); // Rectangle A
-    ctx.strokeRect(260, 140, 120, 80); // Rectangle B
-    ctx.restore();
+    // ctx.save();
+    // ctx.strokeStyle = '#444';
+    // ctx.lineWidth = 2;
+    // ctx.strokeRect(100, 100, 120, 80); // Rectangle A
+    // ctx.strokeRect(260, 140, 120, 80); // Rectangle B
+    // ctx.restore();
     // --- END DEBUG RECTANGLES ---
 
       // call overlay callback while transform still applied

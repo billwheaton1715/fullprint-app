@@ -8,6 +8,7 @@ export abstract class Shape {
   abstract translate(dx: Measurement, dy: Measurement): Shape;
   abstract rotate(angle: Angle, origin: Point): Shape;
   abstract scale(factor: number, origin: Point): Shape;
+
   /**
    * Returns the axis-aligned bounding box of this shape in world coordinates (AABB).
    * Canonical: calls boundingBox() if present.
@@ -15,6 +16,15 @@ export abstract class Shape {
   public getBoundingBox(): import('./Rectangle').Rectangle {
     // @ts-ignore
     return typeof this.boundingBox === 'function' ? this.boundingBox() : undefined;
+  }
+
+  /**
+   * Convenience accessor for the top-left corner of this shape's bounding box.
+   * Derived canonically from getBoundingBox().
+   */
+  public get topLeft(): Point {
+    const bbox = this.getBoundingBox();
+    return bbox.topLeft;
   }
 
   /**
@@ -36,6 +46,7 @@ export abstract class Shape {
     const bbox = this.getBoundingBox();
     return bbox.intersectsRect(rect);
   }
+
   abstract toSvg(): string;
   abstract toCanvas(ctx: CanvasRenderingContext2D): void;
   abstract toJson(): any;

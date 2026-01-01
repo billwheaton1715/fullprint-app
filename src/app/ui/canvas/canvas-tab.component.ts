@@ -1,8 +1,3 @@
-// SelectionOperation model for clarity and future-proofing
-type SelectionOperation =
-  | { type: 'replace'; shapes: any[] }
-  | { type: 'add'; shapes: any[] }
-  | { type: 'toggle'; shapes: any[] };
 /**
  * CanvasTabComponent
  *
@@ -37,10 +32,37 @@ type SelectionOperation =
  *
  * Only drag-shape and drag-select use pointer capture.
  */
+// SelectionOperation model for clarity and future-proofing
+type SelectionOperation =
+  | { type: 'replace'; shapes: any[] }
+  | { type: 'add'; shapes: any[] }
+  | { type: 'toggle'; shapes: any[] };
+
+/**
+ * CanvasTabComponent
+ *
+ * Fully-featured canvas interaction component:
+ * - Drag-shape
+ * - Drag-select
+ * - Pan
+ * - Zoom
+ * - Hover & click selection
+ * - Overlay rendering (grid, bounding boxes, selection handles, crosshairs)
+ */
 import Measurement from '../../core/units/Measurement';
 import { Point } from '../../core/geometry/Point';
 import { Rectangle } from '../../core/geometry/Rectangle';
-import { Component, ElementRef, Input, OnDestroy, OnInit, OnChanges, SimpleChanges, ViewChild, AfterViewInit } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  Input,
+  OnDestroy,
+  OnInit,
+  OnChanges,
+  SimpleChanges,
+  ViewChild,
+  AfterViewInit
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CanvasRendererService } from './canvas-renderer.service';
 import { CanvasViewport } from './canvas-viewport';
@@ -50,77 +72,102 @@ import Shape from '../../core/geometry/Shape';
   standalone: true,
   selector: 'app-canvas-tab',
   imports: [CommonModule],
-  template: `<div class="canvas-host"><canvas #canvasEl></canvas></div>`,
-  styles: [`.canvas-host{width:100%;height:100%;display:block}canvas{display:block;width:100%;height:100%}`]
+  template: `
+    <div #host class="canvas-host">
+      <canvas #canvasEl></canvas>
+    </div>
+  `,
+  styles: [`
+    :host, .canvas-host {
+      display: flex;
+      flex: 1 1 auto;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+    }
+    canvas {
+      flex: 1 1 auto;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  `]
 })
-export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnDestroy {
+export class CanvasTabComponent
+  implements OnInit, AfterViewInit, OnChanges, OnDestroy {
+
   @ViewChild('canvasEl', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('host', { static: true }) hostRef!: ElementRef<HTMLDivElement>;
+
   @Input() shapes: any[] = [];
+  private _previewShapes: Shape[] | null = null;
+  private _selectedIndices: number[] = [];
+  private _didDrag = false;
+  private _lastDragDx: Measurement | null = null;
+  private _lastDragDy: Measurement | null = null;
+  private _suppressNextClickSelection = false;
+
+
   @Input() showBoundingBoxes = false;
   @Input() showGrid = false;
 
   private viewport = new CanvasViewport();
   private _mounted = false;
-  private viewportWidth = 0;
-  private viewportHeight = 0;
 
-  hoveredShape: any | null = null;
-  selectedShapes: any[] = [];
+  hoveredShape: Shape | null = null;
+  selectedShapes: Shape[] = [];
+
   private _pointerScreenX: number | null = null;
   private _pointerScreenY: number | null = null;
+
   private _isPanning = false;
   private _lastX = 0;
   private _lastY = 0;
 
-    // Debug rectangles (render-only, not in state)
-  private static readonly DEBUG_RECT_A = { x: 100, y: 100, width: 120, height: 80 };
-  private static readonly DEBUG_RECT_B = { x: 260, y: 140, width: 120, height: 80 };
-
-  // Pure hit test for a rect
-  private hitTestRect(px: number, py: number, rect: { x: number; y: number; width: number; height: number }): boolean {
-    return px >= rect.x && px <= rect.x + rect.width && py >= rect.y && py <= rect.y + rect.height;
-  }
+  private resizeObserver?: ResizeObserver;
 
   private activeInteraction: null | (
-    { type: 'drag-shape', original: any, startWorldX: number, startWorldY: number }
-    | { type: 'drag-select', x0: number, y0: number, x1: number, y1: number }
+    | { type: 'drag-shape'; original: Shape; startWorldX: number; startWorldY: number }
+    | { type: 'drag-select'; x0: number; y0: number; x1: number; y1: number }
   ) = null;
 
   constructor(private renderer: CanvasRendererService) {}
 
-  /**
-   * Centralized group transform application.
-   * Applies a transform function to target shapes and updates this.shapes atomically.
-   */
+  
   private applyGroupTransform(
-    targets: any[],
-    transformFn: (shape: any) => any,
+    targets: Shape[],
+    transformFn: (shape: Shape) => Shape,
     previewOnly = false
-  ): any[] {
-    if (!targets || targets.length === 0) return this.shapes;
+  ): Shape[] {
+    if (!targets.length) return this.shapes;
 
     const targetSet = new Set(targets);
     const newShapes = this.shapes.map(s =>
       targetSet.has(s) ? transformFn(s) : s
     );
 
-    if (previewOnly) return newShapes;
+    if (!previewOnly) {
+      const oldToNew = new Map<Shape, Shape>();
 
-    this.shapes = newShapes;
-    // Rebind selectedShapes to new shape instances by index
-    this.selectedShapes = this.selectedShapes.map(sel => {
-      const idx = targets.indexOf(sel);
-      if (idx !== -1) {
-        // Find the corresponding new shape by index in targets
-        const origIdx = this.shapes.findIndex(s => s === newShapes[targets.indexOf(sel)]);
-        return newShapes[origIdx !== -1 ? origIdx : targets.indexOf(sel)];
-      }
-      // If not in targets, try to find by reference in newShapes
-      const newIdx = newShapes.indexOf(sel);
-      return newIdx !== -1 ? newShapes[newIdx] : sel;
-    });
-    return this.shapes;
+      this.shapes.forEach((oldShape, i) => {
+        if (targetSet.has(oldShape)) {
+          oldToNew.set(oldShape, newShapes[i]);
+        }
+      });
+
+      this.shapes = newShapes;
+
+      // 🔑 remap selectedShapes to new instances
+      this.selectedShapes = this.selectedShapes
+        .map(s => oldToNew.get(s) ?? s)
+        .filter(s => this.shapes.includes(s));
+
+    }
+
+
+    return newShapes;
   }
+
 
   private applySelectionOperation(op: SelectionOperation) {
     switch (op.type) {
@@ -135,8 +182,9 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
       case 'toggle':
         for (const s of op.shapes) {
           const idx = this.selectedShapes.indexOf(s);
-          if (idx >= 0) this.selectedShapes.splice(idx, 1);
-          else this.selectedShapes.push(s);
+          idx >= 0
+            ? this.selectedShapes.splice(idx, 1)
+            : this.selectedShapes.push(s);
         }
         break;
     }
@@ -146,54 +194,93 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
 
   ngAfterViewInit(): void {
     this._mounted = true;
+
+    if (this.hostRef?.nativeElement) {
+      this.resizeObserver = new ResizeObserver(() => this.resizeCanvas());
+      this.resizeObserver.observe(this.hostRef.nativeElement);
+    }
+
     const canvas = this.canvasRef.nativeElement;
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
     canvas.addEventListener('pointerdown', this.onPointerDown);
     canvas.addEventListener('mousemove', this.onMouseMove);
     canvas.addEventListener('click', this.onClick);
-    window.addEventListener('pointermove', this.onPointerMove);
+
+    canvas.addEventListener('pointermove', this.onPointerMove);
+
+//    window.addEventListener('pointermove', this.onPointerMove);
     window.addEventListener('pointerup', this.onPointerUp);
-    window.addEventListener('resize', this.onResize);
+
+    // TEMP DEBUG: remove once parent provides shapes
+    if (!this.shapes || this.shapes.length === 0) {
+      this.shapes = [
+        new Rectangle(
+          new Point(Measurement.fromPx(100), Measurement.fromPx(100)),
+          Measurement.fromPx(120),
+          Measurement.fromPx(80)
+        ),
+        new Rectangle(
+          new Point(Measurement.fromPx(300), Measurement.fromPx(180)),
+          Measurement.fromPx(140),
+          Measurement.fromPx(90)
+        )
+      ];
+      this.render();
+    }
+
 
     this.resizeCanvas();
-    this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, ctx => this.drawOverlays(ctx));
+    this.render();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (!this._mounted) return;
-    if (changes['shapes']) {
-      this.renderer.render(this.canvasRef.nativeElement, this.shapes, this.viewport, { background: '#fff' }, ctx => this.drawOverlays(ctx));
-    }
+    if (changes['shapes']) this.render();
   }
 
   ngOnDestroy(): void {
+    this.resizeObserver?.disconnect();
     const canvas = this.canvasRef.nativeElement;
     canvas.removeEventListener('wheel', this.onWheel);
     canvas.removeEventListener('pointerdown', this.onPointerDown);
     canvas.removeEventListener('mousemove', this.onMouseMove);
     canvas.removeEventListener('click', this.onClick);
-    window.removeEventListener('pointermove', this.onPointerMove);
+    canvas.removeEventListener('pointermove', this.onPointerMove);
     window.removeEventListener('pointerup', this.onPointerUp);
-    window.removeEventListener('resize', this.onResize);
   }
 
-  private onResize = () => {
-    this.resizeCanvas();
-    this.renderer.render(this.canvasRef.nativeElement, this.shapes, this.viewport, { background: '#fff' }, ctx => this.drawOverlays(ctx));
-  };
+  private render(preview?: Shape[]) {
+    if (!this.canvasRef?.nativeElement || !this.hostRef?.nativeElement) return;
+
+    const canvas = this.canvasRef.nativeElement;
+
+    this._previewShapes = preview ?? null;
+
+    this.renderer.render(
+      canvas,
+      preview ?? this.shapes,
+      this.viewport,
+      { background: '#fff' },
+      ctx => this.drawOverlays(ctx)
+    );
+  }
+
 
   private resizeCanvas() {
     const canvas = this.canvasRef.nativeElement;
+    const host = this.hostRef.nativeElement;
+    const rect = host.getBoundingClientRect();
+
+    if (!rect.width || !rect.height) return;
+
     const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    this.viewportWidth = rect.width;
-    this.viewportHeight = rect.height;
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `${rect.height}px`;
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
+
+    canvas.getContext('2d')?.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.render();
   }
 
   private onWheel = (e: WheelEvent) => {
@@ -201,290 +288,302 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, this.canvasRef.nativeElement);
     this.viewport.zoomAt(delta, sx, sy);
-    this.renderer.render(this.canvasRef.nativeElement, this.shapes, this.viewport, { background: '#fff' }, ctx => this.drawOverlays(ctx));
+    this.render();
   };
 
   private onPointerDown = (e: PointerEvent) => {
     const canvas = this.canvasRef.nativeElement;
-    canvas.setPointerCapture?.(e.pointerId);
     const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
     const world = this.viewport.screenToWorld(sx, sy);
 
-    // Debug logging removed
-
     if (e.button === 0) {
       const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
-      let hit = null;
-      let hitIndex = -1;
-      for (let i = this.shapes.length - 1; i >= 0; i--) {
-        const s = this.shapes[i];
-        try {
-          if (s && typeof s.getBoundingBox === 'function' && s.containsPoint(p)) {
-            hit = s;
-            hitIndex = i;
-            break;
+      const hit = [...this.shapes].reverse().find(s => s.containsPoint?.(p)) ?? null;
+
+      canvas.setPointerCapture?.(e.pointerId);
+
+      // if (hit) {
+      //   // If the hit shape isn't already selected, select it now.
+      //   // (Drag immediately = select + drag, standard editor behavior)
+      //   if (!this.selectedShapes.includes(hit)) {
+      //     this.applySelectionOperation({ type: 'replace', shapes: [hit] });
+      //     this.rebuildSelectedIndices();
+      //   }
+        
+      //   this.activeInteraction = {
+      //     type: 'drag-shape',
+      //     original: hit,
+      //     startWorldX: world.xPx,
+      //     startWorldY: world.yPx
+      //   };
+      //   // reset last drag delta
+      //   this._lastDragDx = null;
+      //   this._lastDragDy = null;        
+      // } else {
+      //   // Only empty space starts drag-select
+      //   this.activeInteraction = {
+      //     type: 'drag-select',
+      //     x0: sx,
+      //     y0: sy,
+      //     x1: sx,
+      //     y1: sy
+      //   };
+      // }
+      if (hit) {
+        canvas.setPointerCapture?.(e.pointerId);
+
+        // SHIFT behavior: toggle immediately on pointerdown (and skip click handler)
+        if (e.shiftKey) {
+          this.applySelectionOperation({ type: 'toggle', shapes: [hit] });
+          this.rebuildSelectedIndices();
+          this._suppressNextClickSelection = true;
+
+          // If the toggle turned it ON, allow drag to start right away.
+          // If the toggle turned it OFF, do not start a drag interaction.
+          if (this.selectedShapes.includes(hit)) {
+            this.activeInteraction = {
+              type: 'drag-shape',
+              original: hit,
+              startWorldX: world.xPx,
+              startWorldY: world.yPx
+            };
+            this._lastDragDx = null;
+            this._lastDragDy = null;
+          } else {
+            this.activeInteraction = null;
           }
-        } catch (err) {
-          // Debug logging removed
+
+          this.render(); // show the toggle immediately
+          return;
         }
-      }
-      if (typeof window !== 'undefined') {
-        // Debug logging removed
-      }
-      if (hit && this.selectedShapes.includes(hit)) {
-        // Always set anchor to current world position at pointerdown
+
+        // Non-shift: standard behavior (select-for-drag)
+        if (!this.selectedShapes.includes(hit)) {
+          this.applySelectionOperation({ type: 'replace', shapes: [hit] });
+          this.rebuildSelectedIndices();
+
+          // Optional: prevent click from re-doing selection (keeps logic single-source)
+          this._suppressNextClickSelection = true;
+        }
+
         this.activeInteraction = {
           type: 'drag-shape',
           original: hit,
           startWorldX: world.xPx,
           startWorldY: world.yPx
         };
-        // Debug logging removed
+        this._lastDragDx = null;
+        this._lastDragDy = null;
       } else {
+        canvas.setPointerCapture?.(e.pointerId);
+
+        // Only empty space starts drag-select
         this.activeInteraction = {
           type: 'drag-select',
-          x0: sx, y0: sy, x1: sx, y1: sy
+          x0: sx,
+          y0: sy,
+          x1: sx,
+          y1: sy
         };
       }
-    } else if (e.button === 1) {
+
+
+    }
+
+    if (e.button === 1) {
       this._isPanning = true;
       this._lastX = e.clientX;
       this._lastY = e.clientY;
     }
+    
+
   };
 
   private onMouseMove = (e: MouseEvent) => {
-    const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, this.canvasRef.nativeElement);
+    const canvas = this.canvasRef.nativeElement;
+    const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
     this._pointerScreenX = sx;
     this._pointerScreenY = sy;
-    this.renderer.render(this.canvasRef.nativeElement, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
+    // 🔑 If we're dragging, pointermove is already driving renders (including previews).
+    // Do NOT repaint from mousemove or you'll overwrite the preview and it will "teleport".
+    if (this.activeInteraction) return;   
+
+    const world = this.viewport.screenToWorld(sx, sy);
+    const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
+
+    this.hoveredShape =
+      [...this.shapes].reverse().find(s => s.containsPoint?.(p)) ?? null;
+
+    this.render();
+    
+
   };
 
   private onPointerMove = (e: PointerEvent) => {
+    //console.log('pointermove', this.activeInteraction?.type);
+
+    if (!this.activeInteraction) return;
+
     const canvas = this.canvasRef.nativeElement;
-    if (this.activeInteraction) {
-      if (this.activeInteraction.type === 'drag-select') {
-        const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
-        this.activeInteraction.x1 = sx;
-        this.activeInteraction.y1 = sy;
-        this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
-        return;
-      } else if (this.activeInteraction.type === 'drag-shape') {
-        const drag = this.activeInteraction;
-        const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
-        // Calculate world delta directly from pointer movement
-        const scale = this.viewport.getScale();
-        const startScreen = this.viewport.worldToScreen(drag.startWorldX, drag.startWorldY);
-        let dxPx = NaN, dyPx = NaN;
-        let dxMm: Measurement, dyMm: Measurement;
-        const debugVars = { sx, sy, startScreen, scale, drag };
-        if (typeof window !== 'undefined') {
-          // Debug logging removed
-        }
-        // Defensive: check all relevant variables for finiteness
-        if (
-          typeof sx !== 'number' || !isFinite(sx) ||
-          typeof sy !== 'number' || !isFinite(sy) ||
-          !startScreen || typeof startScreen.xPx !== 'number' || !isFinite(startScreen.xPx) ||
-          typeof startScreen.yPx !== 'number' || !isFinite(startScreen.yPx) ||
-          typeof scale !== 'number' || !isFinite(scale) || scale === 0
-        ) {
-          if (typeof window !== 'undefined') {
-            console.error('[ERROR] Invalid drag delta input:', debugVars);
-          }
-          // Render original shapes, skip transform
-          this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
-          return;
-        }
-        dxPx = (sx - startScreen.xPx) / scale;
-        dyPx = (sy - startScreen.yPx) / scale;
-        dxMm = Measurement.fromPx(dxPx);
-        dyMm = Measurement.fromPx(dyPx);
-        if (typeof window !== 'undefined') {
-          // Debug logging removed
-        }
-        if (!dxMm || !dyMm || !Number.isFinite(dxMm.toUnit('mm')) || !Number.isFinite(dyMm.toUnit('mm'))) {
-          if (typeof window !== 'undefined') {
-            console.error('[ERROR] Non-finite dxMm/dyMm in transform:', { dxPx, dyPx, dxMm, dyMm, debugVars });
-          }
-          this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
-          return;
-        }
-        const targets = (this.selectedShapes.length > 1 && this.selectedShapes.includes(drag.original))
+    const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
+    this._pointerScreenX = sx;
+    this._pointerScreenY = sy;
+
+    if (this.activeInteraction?.type === 'drag-select') {
+      this._didDrag = true;
+
+      this.activeInteraction.x1 = sx;
+      this.activeInteraction.y1 = sy;
+      const r = this.activeInteraction;
+
+      const x0 = Math.min(r.x0, r.x1);
+      const y0 = Math.min(r.y0, r.y1);
+      const x1 = Math.max(r.x0, r.x1);
+      const y1 = Math.max(r.y0, r.y1);
+
+      const previewSelected = this.shapes.filter(s => {
+        const bb = s.getBoundingBox();
+        const bx0 = bb.topLeft.x.toUnit('px');
+        const by0 = bb.topLeft.y.toUnit('px');
+        const bx1 = bx0 + bb.width.toUnit('px');
+        const by1 = by0 + bb.height.toUnit('px');
+
+        return !(bx1 < x0 || bx0 > x1 || by1 < y0 || by0 > y1);
+      });
+
+      this._previewShapes = this.shapes;
+      this._selectedIndices = previewSelected
+        .map(s => this.shapes.indexOf(s))
+        .filter(i => i !== -1);
+
+      this.render();
+
+      return;
+    }
+
+    if (this.activeInteraction?.type === 'drag-shape') {
+      this._didDrag = true;
+
+      const drag = this.activeInteraction;
+
+      const worldNow = this.viewport.screenToWorld(sx, sy);
+
+      const dx = Measurement.fromPx(worldNow.xPx - drag.startWorldX);
+      const dy = Measurement.fromPx(worldNow.yPx - drag.startWorldY);
+
+      this._lastDragDx = dx;
+      this._lastDragDy = dy;
+
+      const targets =
+        this.selectedShapes.length > 1 && this.selectedShapes.includes(drag.original)
           ? this.selectedShapes
           : [drag.original];
-        // Always produce a new preview array with translated shapes (never reuse original)
-        const preview = this.applyGroupTransform(
-          targets,
-          s => {
-            if (typeof s.translate === 'function') {
-              return s.translate(dxMm, dyMm);
-            }
-            return s instanceof Object ? Object.assign(Object.create(Object.getPrototypeOf(s)), s) : s;
-          },
-          true
-        );
-        if (typeof window !== 'undefined') {
-          // Debug logging removed
-        }
-        this.renderer.render(canvas, preview, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
-        return;
-      }
+
+      this.render(this.applyGroupTransform(targets, s => s.translate(dx, dy), true));
+      return;
     }
+
+
     if (this._isPanning) {
-      const dx = e.clientX - this._lastX;
-      const dy = e.clientY - this._lastY;
+      this.viewport.panBy(e.clientX - this._lastX, e.clientY - this._lastY);
       this._lastX = e.clientX;
       this._lastY = e.clientY;
-      this.viewport.panBy(dx, dy);
-      this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' });
+      this.render();
     }
   };
 
   private onPointerUp = (e: PointerEvent) => {
-    if (typeof window !== 'undefined') {
-      // Debug logging removed
-    }
-    const canvas = this.canvasRef.nativeElement;
-    canvas.releasePointerCapture?.(e.pointerId);
-    if (this.activeInteraction) {
-      if (this.activeInteraction.type === 'drag-select') {
-        const rect = this.activeInteraction;
-        // Only construct Rectangle if drag distance is nonzero
-        if (rect.x0 !== rect.x1 && rect.y0 !== rect.y1) {
-          const xMin = Math.min(rect.x0, rect.x1);
-          const xMax = Math.max(rect.x0, rect.x1);
-          const yMin = Math.min(rect.y0, rect.y1);
-          const yMax = Math.max(rect.y0, rect.y1);
-          const tl = this.viewport.screenToWorld(xMin, yMin);
-          const br = this.viewport.screenToWorld(xMax, yMax);
-          const wxMin = Math.min(tl.xPx, br.xPx);
-          const wxMax = Math.max(tl.xPx, br.xPx);
-          const wyMin = Math.min(tl.yPx, br.yPx);
-          const wyMax = Math.max(tl.yPx, br.yPx);
-          const dragRect = new Rectangle(
-            new Point(Measurement.fromPx(wxMin), Measurement.fromPx(wyMin)),
-            new Measurement(wxMax - wxMin, 'mm'),
-            new Measurement(wyMax - wyMin, 'mm')
-          );
-          const shapes = this.shapes.filter(s =>
-            s && typeof s.getBoundingBox === 'function' && s.intersectsRect(dragRect)
-          );
-          this.applySelectionOperation({ type: 'replace', shapes });
-          this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
-        } else {
-          // Treat zero-drag as click: select shape under pointer
-          const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
-          const world = this.viewport.screenToWorld(sx, sy);
-          const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
-          let found = null;
-          for (let i = this.shapes.length - 1; i >= 0; i--) {
-            const s = this.shapes[i];
-            try {
-              if (s && typeof s.containsPoint === 'function' && s.containsPoint(p)) {
-                found = s;
-                break;
-              }
-            } catch {}
-          }
-          if (e.shiftKey) {
-            if (found) {
-              this.applySelectionOperation({ type: 'toggle', shapes: [found] });
-            }
-          } else {
-            this.applySelectionOperation({ type: 'replace', shapes: found ? [found] : [] });
-          }
-          this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
-        }
-        // For test compatibility: set _dragSelectRect to null so tests expecting this property pass
-        (this as any)._dragSelectRect = null;
-      }
-      // drag-shape: commit translation if needed
-      if (this.activeInteraction.type === 'drag-shape') {
-        const drag = this.activeInteraction;
-        const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
-        const world = this.viewport.screenToWorld(sx, sy);
-        const dxPx = world.xPx - drag.startWorldX;
-        const dyPx = world.yPx - drag.startWorldY;
+    this.canvasRef.nativeElement.releasePointerCapture?.(e.pointerId);
 
-        if (dxPx !== 0 || dyPx !== 0) {
-          // Use Measurement instances for translation (not numbers)
-          const dxM = Measurement.fromPx(dxPx);
-          const dyM = Measurement.fromPx(dyPx);
-          const targets = (this.selectedShapes.length > 1 && this.selectedShapes.includes(drag.original))
-            ? this.selectedShapes
-            : [drag.original];
-          this.applyGroupTransform(
-            targets,
-            s => {
-              try {
-                return s.translate(dxM, dyM);
-              } catch {
-                return s;
-              }
-            }
-          );
-          // Set activeInteraction to null BEFORE rendering, so preview cannot be shown after commit
-          this.activeInteraction = null;
-          this.renderer.render(
-            canvas,
-            this.shapes,
-            this.viewport,
-            { background: '#fff' },
-            ctx => this.drawOverlays(ctx)
-          );
-          return;
-        }
-        // If no movement, just clear interaction
-        this.activeInteraction = null;
-      }
+    if (this.activeInteraction?.type === 'drag-select') {
+      const r = this.activeInteraction;
+
+      const x0 = Math.min(r.x0, r.x1);
+      const y0 = Math.min(r.y0, r.y1);
+      const x1 = Math.max(r.x0, r.x1);
+      const y1 = Math.max(r.y0, r.y1);
+
+      this.selectedShapes = this.shapes.filter(s => {
+        const bb = s.getBoundingBox();
+        const bx0 = bb.topLeft.x.toUnit('px');
+        const by0 = bb.topLeft.y.toUnit('px');
+        const bx1 = bx0 + bb.width.toUnit('px');
+        const by1 = by0 + bb.height.toUnit('px');
+
+        return !(bx1 < x0 || bx0 > x1 || by1 < y0 || by0 > y1);
+      });
+      this._previewShapes = null;
+      this.rebuildSelectedIndices();
     }
+
+    if (this.activeInteraction?.type === 'drag-shape') {
+      const drag = this.activeInteraction;
+
+      const targets =
+        this.selectedShapes.length > 1 && this.selectedShapes.includes(drag.original)
+          ? this.selectedShapes
+          : [drag.original];
+
+      if (this._lastDragDx && this._lastDragDy) {
+        this.applyGroupTransform(targets, s => s.translate(this._lastDragDx!, this._lastDragDy!));
+      }
+
+      this._lastDragDx = null;
+      this._lastDragDy = null;
+      this._previewShapes = null;
+      this.rebuildSelectedIndices();
+    }
+
+
+    this.activeInteraction = null;
     this._isPanning = false;
+    this.updateHoverFromPointer();
+
+    this.render();
+
+    
+
   };
 
   private onClick = (e: MouseEvent) => {
+    if (this._didDrag) {
+      this._didDrag = false;
+      return;
+    }
+
+    if (this._suppressNextClickSelection) {
+      this._suppressNextClickSelection = false;
+      return;
+    }
+
+
     if (this._isPanning) return;
+
     const canvas = this.canvasRef.nativeElement;
     const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
     const world = this.viewport.screenToWorld(sx, sy);
-
-    // Debug rectangle hit testing (render-only, logs only)
-    const px = world.xPx;
-    const py = world.yPx;
-    if (this.hitTestRect(px, py, CanvasTabComponent.DEBUG_RECT_A)) {
-      console.log('Rect A hit');
-    } else if (this.hitTestRect(px, py, CanvasTabComponent.DEBUG_RECT_B)) {
-      console.log('Rect B hit');
-    }
-
     const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
 
-    let found = null;
-    for (let i = this.shapes.length - 1; i >= 0; i--) {
-      const s = this.shapes[i];
-      try {
-        if (s && typeof s.containsPoint === 'function' && s.containsPoint(p)) {
-          found = s;
-          break;
-        }
-      } catch {}
-    }
+    const found =
+      [...this.shapes].reverse().find(s => s.containsPoint?.(p)) ?? null;
 
-    if (e.shiftKey) {
-      if (found) {
-        this.applySelectionOperation({ type: 'toggle', shapes: [found] });
-      }
-    } else {
-      this.applySelectionOperation({ type: 'replace', shapes: found ? [found] : [] });
-    }
+    this.applySelectionOperation({
+      type: e.shiftKey ? 'toggle' : 'replace',
+      shapes: found ? [found] : []
+    });
 
-    this.renderer.render(canvas, this.shapes, this.viewport, { background: '#fff' }, (ctx) => this.drawOverlays(ctx));
+    this.rebuildSelectedIndices();
+    this.render();
   };
+
+
+
 
   public drawOverlays(ctx: CanvasRenderingContext2D) {
     const canvas = this.canvasRef.nativeElement;
     const { topLeft, bottomRight } = this.viewport.getVisibleWorldRect(canvas);
-
+    const shapesForOverlay: Shape[] = this._previewShapes ?? this.shapes;
+    
     // Grid
     if (this.showGrid) {
       const spacingPx = Measurement.fromMm(1).toUnit('px');
@@ -516,10 +615,10 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
       ctx.setLineDash([4, 4]);
       ctx.strokeStyle = '#888';
       ctx.lineWidth = 1 / (this.viewport.getScale() || 1);
-      for (const s of this.shapes || []) {
+      for (const s of shapesForOverlay || []) {
         try {
-          if (s && typeof s.boundingBox === 'function') {
-            const bb = s.boundingBox();
+          if (s && typeof s.getBoundingBox === 'function') {
+            const bb = s.getBoundingBox();
             ctx.strokeRect(bb.topLeft.x.toUnit('px'), bb.topLeft.y.toUnit('px'), bb.width.toUnit('px'), bb.height.toUnit('px'));
           }
         } catch {}
@@ -528,8 +627,8 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
     }
 
     // Selection outlines
-    if (this.selectedShapes && this.selectedShapes.length) {
-      const groupBox = this.getGroupBoundingBox();
+    if (shapesForOverlay && shapesForOverlay.length) {
+      const groupBox = this.getGroupBoundingBox(this._selectedIndices.map(i => shapesForOverlay[i]).filter(Boolean));
       if (groupBox) {
         ctx.save();
         ctx.setLineDash([6, 3]);
@@ -574,18 +673,24 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
       ctx.save();
       ctx.strokeStyle = '#ff0000';
       ctx.lineWidth = 2 / (this.viewport.getScale() || 1);
-      for (const s of this.selectedShapes) {
+      this._selectedIndices.forEach(i => {
+        const s = shapesForOverlay[i];
+        if (!s) return;
         try { s.toCanvas(ctx); } catch {}
-      }
+      });
+
+
       ctx.restore();
     }
-
-    if (this.hoveredShape && (!this.selectedShapes || !this.selectedShapes.includes(this.hoveredShape))) {
-      ctx.save();
-      ctx.strokeStyle = '#00aaff';
-      ctx.lineWidth = 1 / (this.viewport.getScale() || 1);
-      try { this.hoveredShape.toCanvas(ctx); } catch {}
-      ctx.restore();
+    const isDragging = this.activeInteraction?.type === 'drag-shape' || this.activeInteraction?.type === 'drag-select';
+    if (!isDragging && this.hoveredShape && (!this.selectedShapes || !this.selectedShapes.includes(this.hoveredShape))) {
+      if (this.hoveredShape && (!this.selectedShapes || !this.selectedShapes.includes(this.hoveredShape))) {
+        ctx.save();
+        ctx.strokeStyle = '#00aaff';
+        ctx.lineWidth = 1 / (this.viewport.getScale() || 1);
+        try { this.hoveredShape.toCanvas(ctx); } catch {}
+        ctx.restore();
+      }
     }
 
     // Draw drag-select rectangle if active
@@ -617,15 +722,14 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
       ctx.restore();
     }
   }
-
-  public getGroupBoundingBox(): Rectangle | null {
-    if (!this.selectedShapes || this.selectedShapes.length === 0) return null;
+  public getGroupBoundingBox(shapes: Shape[]): Rectangle | null {
+    if (!shapes || shapes.length === 0) return null;
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
-    for (const s of this.selectedShapes) {
-      if (s && typeof s.boundingBox === 'function') {
-        const bb = s.boundingBox();
+    for (const s of shapes) {
+      if (s) {
+        const bb = s.getBoundingBox();
         const x = bb.topLeft.x.toUnit('px');
         const y = bb.topLeft.y.toUnit('px');
         const w = bb.width.toUnit('px');
@@ -644,5 +748,21 @@ export class CanvasTabComponent implements OnInit, AfterViewInit, OnChanges, OnD
       Measurement.fromPx(maxX - minX),
       Measurement.fromPx(maxY - minY)
     );
+  }  
+
+  private rebuildSelectedIndices() {
+    this._selectedIndices = this.selectedShapes
+      .map(s => this.shapes.indexOf(s))
+      .filter(i => i !== -1);
   }
+  private updateHoverFromPointer() {
+    if (this._pointerScreenX == null || this._pointerScreenY == null) {
+      this.hoveredShape = null;
+      return;
+    }
+    const world = this.viewport.screenToWorld(this._pointerScreenX, this._pointerScreenY);
+    const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
+    this.hoveredShape = [...this.shapes].reverse().find(s => s.containsPoint?.(p)) ?? null;
+  }
+
 }
