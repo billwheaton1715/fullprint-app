@@ -1,3 +1,4 @@
+
 ----- beginning of step 2 discussion -----
 
 me:

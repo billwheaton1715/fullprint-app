@@ -1,3 +1,4 @@
+
 ----- beginning of step 3 disussion -----
 
 me:
