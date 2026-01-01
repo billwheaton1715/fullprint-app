@@ -33,10 +33,10 @@
  * Only drag-shape and drag-select use pointer capture.
  */
 // SelectionOperation model for clarity and future-proofing
-type SelectionOperation =
-  | { type: 'replace'; shapes: any[] }
-  | { type: 'add'; shapes: any[] }
-  | { type: 'toggle'; shapes: any[] };
+// type SelectionOperation =
+//   | { type: 'replace'; shapes: any[] }
+//   | { type: 'add'; shapes: any[] }
+//   | { type: 'toggle'; shapes: any[] };
 
 /**
  * CanvasTabComponent
@@ -67,6 +67,8 @@ import {
 import { CommonModule } from '@angular/common';
 import { CanvasRendererService } from './canvas-renderer.service';
 import { CanvasOverlayRenderer } from './canvas-overlay-renderer';
+import { CanvasSelectionModel, SelectionOperation } from './canvas-selection-model';
+
 import { CanvasViewport } from './canvas-viewport';
 import Shape from '../../core/geometry/Shape';
 
@@ -103,7 +105,6 @@ export class CanvasTabComponent
 
   @Input() shapes: any[] = [];
   private _previewShapes: Shape[] | null = null;
-  private _selectedIndices: number[] = [];
   private _didDrag = false;
   private _lastDragDx: Measurement | null = null;
   private _lastDragDy: Measurement | null = null;
@@ -120,7 +121,7 @@ export class CanvasTabComponent
   private _mounted = false;
 
   hoveredShape: Shape | null = null;
-  selectedShapes: Shape[] = [];
+  private selection: CanvasSelectionModel = new CanvasSelectionModel();
 
   private _pointerScreenX: number | null = null;
   private _pointerScreenY: number | null = null;
@@ -163,38 +164,12 @@ export class CanvasTabComponent
       });
 
       this.shapes = newShapes;
-
-      // 🔑 remap selectedShapes to new instances
-      this.selectedShapes = this.selectedShapes
-        .map(s => oldToNew.get(s) ?? s)
-        .filter(s => this.shapes.includes(s));
+      this.selection.remapAfterShapeReplacement(oldToNew, this.shapes);
 
     }
 
 
     return newShapes;
-  }
-
-
-  private applySelectionOperation(op: SelectionOperation) {
-    switch (op.type) {
-      case 'replace':
-        this.selectedShapes = op.shapes.slice();
-        break;
-      case 'add':
-        for (const s of op.shapes) {
-          if (!this.selectedShapes.includes(s)) this.selectedShapes.push(s);
-        }
-        break;
-      case 'toggle':
-        for (const s of op.shapes) {
-          const idx = this.selectedShapes.indexOf(s);
-          idx >= 0
-            ? this.selectedShapes.splice(idx, 1)
-            : this.selectedShapes.push(s);
-        }
-        break;
-    }
   }
 
   ngOnInit(): void {}
@@ -331,13 +306,13 @@ export class CanvasTabComponent
 
         // SHIFT behavior: toggle immediately on pointerdown (and skip click handler)
         if (e.shiftKey) {
-          this.applySelectionOperation({ type: 'toggle', shapes: [hit] });
-          this.rebuildSelectedIndices();
+          this.selection.apply({ type: 'toggle', shapes: [hit] });
+          this.selection.syncIndices(this.shapes);
           this._suppressNextClickSelection = true;
 
           // If the toggle turned it ON, allow drag to start right away.
           // If the toggle turned it OFF, do not start a drag interaction.
-          if (this.selectedShapes.includes(hit)) {
+          if (this.selection.selectedShapes.includes(hit)) {
             this.activeInteraction = {
               type: 'drag-shape',
               original: hit,
@@ -355,9 +330,9 @@ export class CanvasTabComponent
         }
 
         // Non-shift: standard behavior (select-for-drag)
-        if (!this.selectedShapes.includes(hit)) {
-          this.applySelectionOperation({ type: 'replace', shapes: [hit] });
-          this.rebuildSelectedIndices();
+        if (!this.selection.selectedShapes.includes(hit)) {
+          this.selection.apply({ type: 'replace', shapes: [hit] });
+          this.selection.syncIndices(this.shapes);
 
           // Optional: prevent click from re-doing selection (keeps logic single-source)
           this._suppressNextClickSelection = true;
@@ -404,8 +379,7 @@ export class CanvasTabComponent
 
     this._pointerScreenX = sx;
     this._pointerScreenY = sy;
-    // 🔑 If we're dragging, pointermove is already driving renders (including previews).
-    // Do NOT repaint from mousemove or you'll overwrite the preview and it will "teleport".
+
     if (this.activeInteraction) return;   
 
     const world = this.viewport.screenToWorld(sx, sy);
@@ -458,7 +432,7 @@ export class CanvasTabComponent
       });
 
       this._previewShapes = this.shapes;
-      this._selectedIndices = previewSelected
+      this.selection.selectedIndices = previewSelected
         .map(s => this.shapes.indexOf(s))
         .filter(i => i !== -1);
 
@@ -483,8 +457,8 @@ export class CanvasTabComponent
       this._lastDragDy = dy;
 
       const targets =
-        this.selectedShapes.length > 1 && this.selectedShapes.includes(drag.original)
-          ? this.selectedShapes
+        this.selection.selectedShapes.length > 1 && this.selection.selectedShapes.includes(drag.original)
+          ? this.selection.selectedShapes
           : [drag.original];
 
       this.render(this.applyGroupTransform(targets, s => s.translate(dx, dy), true));
@@ -521,13 +495,13 @@ export class CanvasTabComponent
         return !(bx1 < x0 || bx0 > x1 || by1 < y0 || by0 > y1);
       });
 
-      this.applySelectionOperation({
+      this.selection.apply({
         type: r.shift ? 'add' : 'replace',
         shapes: selected
       });
 
       this._previewShapes = null;
-      this.rebuildSelectedIndices();
+      this.selection.syncIndices(this.shapes);
     }
 
 
@@ -535,8 +509,8 @@ export class CanvasTabComponent
       const drag = this.activeInteraction;
 
       const targets =
-        this.selectedShapes.length > 1 && this.selectedShapes.includes(drag.original)
-          ? this.selectedShapes
+        this.selection.selectedShapes.length > 1 && this.selection.selectedShapes.includes(drag.original)
+          ? this.selection.selectedShapes
           : [drag.original];
 
       if (this._lastDragDx && this._lastDragDy) {
@@ -546,7 +520,7 @@ export class CanvasTabComponent
       this._lastDragDx = null;
       this._lastDragDy = null;
       this._previewShapes = null;
-      this.rebuildSelectedIndices();
+      this.selection.syncIndices(this.shapes);
     }
 
 
@@ -587,19 +561,19 @@ export class CanvasTabComponent
     if (!found) {
       // Click on empty: clear selection (but Shift+click empty should preserve selection)
       if (!e.shiftKey) {
-        this.applySelectionOperation({ type: 'replace', shapes: [] });
-        this.rebuildSelectedIndices();
+        this.selection.apply({ type: 'replace', shapes: [] });
+        this.selection.syncIndices(this.shapes);
         this.render();
       }
       return;
     }
 
-    this.applySelectionOperation({
+    this.selection.apply({
       type: e.shiftKey ? 'toggle' : 'replace',
       shapes: [found]
     });
 
-    this.rebuildSelectedIndices();
+    this.selection.syncIndices(this.shapes);
     this.render();
 
 
@@ -611,7 +585,7 @@ export class CanvasTabComponent
     this.overlayRenderer.draw(ctx, canvas, {
       viewport: this.viewport,
       shapesForOverlay,
-      selectedIndices: this._selectedIndices,
+      selectedIndices: this.selection.selectedIndices,
       hoveredShape: this.hoveredShape,
       pointerScreen:
         this._pointerScreenX != null && this._pointerScreenY != null
@@ -625,11 +599,7 @@ export class CanvasTabComponent
           : null
     });
   }
-  private rebuildSelectedIndices() {
-    this._selectedIndices = this.selectedShapes
-      .map(s => this.shapes.indexOf(s))
-      .filter(i => i !== -1);
-  }
+
 
   private updateHoverFromPointer() {
     if (this._pointerScreenX == null || this._pointerScreenY == null) {
