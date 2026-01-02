@@ -27,6 +27,8 @@ export interface CanvasOverlayState {
 
   // Drag-select marquee rect in WORLD coords (px), since overlays render under viewport transform
   dragSelectRect: DragSelectRect;
+
+  groupBoundingBox?: Rectangle | null;
 }
 
 export class CanvasOverlayRenderer {
@@ -85,8 +87,7 @@ export class CanvasOverlayRenderer {
 
     // Selection outlines + handles
     if (shapesForOverlay && shapesForOverlay.length) {
-      const selectedShapes = state.selectedIndices.map(i => shapesForOverlay[i]).filter(Boolean);
-      const groupBox = this.getGroupBoundingBox(selectedShapes);
+      const groupBox = state.groupBoundingBox;
 
       if (groupBox) {
         ctx.save();
@@ -202,30 +203,5 @@ export class CanvasOverlayRenderer {
     }
   }
 
-  private getGroupBoundingBox(shapes: Shape[]): Rectangle | null {
-    if (!shapes || shapes.length === 0) return null;
 
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-    for (const s of shapes) {
-      if (!s) continue;
-      const bb = (s as any).getBoundingBox();
-      const x = bb.topLeft.x.toUnit('px');
-      const y = bb.topLeft.y.toUnit('px');
-      const w = bb.width.toUnit('px');
-      const h = bb.height.toUnit('px');
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x + w);
-      maxY = Math.max(maxY, y + h);
-    }
-
-    if (minX === Infinity) return null;
-
-    return new Rectangle(
-      new Point(Measurement.fromPx(minX), Measurement.fromPx(minY)),
-      Measurement.fromPx(maxX - minX),
-      Measurement.fromPx(maxY - minY)
-    );
-  }
 }

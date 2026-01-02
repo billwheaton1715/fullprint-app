@@ -69,8 +69,10 @@ import { CanvasRendererService } from './canvas-renderer.service';
 import { CanvasOverlayRenderer } from './canvas-overlay-renderer';
 import { CanvasSelectionModel} from './canvas-selection-model';
 import { CanvasInteractionController } from './canvas-interaction-controller';
-
+import { CanvasSelectionController } from './canvas-selection-controller';
+import { CanvasHitTestController } from './canvas-hit-test-controller';
 import { CanvasViewport } from './canvas-viewport';
+
 import Shape from '../../core/geometry/Shape';
 
 @Component({
@@ -114,7 +116,6 @@ export class CanvasTabComponent
   private _mounted = false;
 
   hoveredShape: Shape | null = null;
-  private selection: CanvasSelectionModel = new CanvasSelectionModel();
 
   private _pointerScreenX: number | null = null;
   private _pointerScreenY: number | null = null;
@@ -127,6 +128,8 @@ export class CanvasTabComponent
 
   private overlayRenderer = new CanvasOverlayRenderer();
   private interaction = new CanvasInteractionController();
+  private selectionController = new CanvasSelectionController(new CanvasSelectionModel());
+  private hitTest = new CanvasHitTestController();
 
   constructor(private renderer: CanvasRendererService) {}
 
@@ -153,7 +156,8 @@ export class CanvasTabComponent
       });
 
       this.shapes = newShapes;
-      this.selection.remapAfterShapeReplacement(oldToNew, this.shapes);
+      this.selectionController.remapAfterShapeReplacement(oldToNew, this.shapes);
+
     }
     return newShapes;
   }
@@ -280,7 +284,8 @@ export class CanvasTabComponent
 
     if (e.button === 0) {
       const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
-      const hit = [...this.shapes].reverse().find(s => s.containsPoint?.(p)) ?? null;
+
+      const hit =  this.hitTest.hitTestTopmost(this.shapes, world.xPx, world.yPx);
 
       this.interaction.pointerDown({
         sx, sy,
@@ -299,23 +304,26 @@ export class CanvasTabComponent
       if (hit) {
         // SHIFT behavior: toggle immediately on pointerdown (and skip click handler)
         if (e.shiftKey) {
-          this.selection.apply({ type: 'toggle', shapes: [hit] });
-          this.selection.syncIndices(this.shapes);
+          this.selectionController.pointerDownOnShape(hit, e.shiftKey);
+          this.selectionController.syncIndices(this.shapes);
+
           this.interaction.setSuppressNextClickSelection();
 
           // if toggled OFF, cancel drag
-          if (!this.selection.selectedShapes.includes(hit)) {
+          if (!this.selectionController.isSelected(hit)) {
             this.interaction.activeInteraction = null;
           }
+
 
           this.render(); // show the toggle immediately
           return;
         }
 
         // Non-shift: standard behavior (select-for-drag)
-        if (!this.selection.selectedShapes.includes(hit)) {
-          this.selection.apply({ type: 'replace', shapes: [hit] });
-          this.selection.syncIndices(this.shapes);
+        if (!this.selectionController.isSelected(hit)) {
+          this.selectionController.pointerDownOnShape(hit, e.shiftKey);
+          this.selectionController.syncIndices(this.shapes);
+
           this.interaction.setSuppressNextClickSelection();
         }
       } 
@@ -372,7 +380,6 @@ export class CanvasTabComponent
       const r = this.interaction.activeInteraction;
       if (r?.type !== 'drag-select') return;
 
-      // **THIS IS THE KEY FIX**
       // Update world end-point from current pointer (screen -> world)
       const worldNow = this.viewport.screenToWorld(sx, sy);
       r.wx1 = worldNow.xPx;
@@ -384,19 +391,7 @@ export class CanvasTabComponent
       const x1 = Math.max(r.wx0, r.wx1);
       const y1 = Math.max(r.wy0, r.wy1);
 
-      const previewSelected = this.shapes.filter(s => {
-        const bb = s.getBoundingBox();
-        const bx0 = bb.topLeft.x.toUnit('px');
-        const by0 = bb.topLeft.y.toUnit('px');
-        const bx1 = bx0 + bb.width.toUnit('px');
-        const by1 = by0 + bb.height.toUnit('px');
-
-        return !(bx1 < x0 || bx0 > x1 || by1 < y0 || by0 > y1);
-      });
-
-      this.interaction.previewSelectedIndices = previewSelected
-        .map(s => this.shapes.indexOf(s))
-        .filter(i => i !== -1);
+      this.interaction.previewSelectedIndices = this.selectionController.previewMarqueeIndices(this.shapes, x0, y0, x1, y1);
 
       this._previewShapes = this.shapes;
       this.render();
@@ -419,10 +414,8 @@ export class CanvasTabComponent
       this.interaction.lastDragDx = dx;
       this.interaction.lastDragDy = dy;
 
-      const targets =
-        this.selection.selectedShapes.length > 1 && this.selection.selectedShapes.includes(drag.original)
-          ? this.selection.selectedShapes
-          : [drag.original];
+      const targets = this.selectionController.getDragTargets(drag.original);
+
 
       this.render(this.applyGroupTransform(targets, s => s.translate(dx, dy), true));
       return;
@@ -448,25 +441,18 @@ export class CanvasTabComponent
       const y0 = Math.min(r.wy0, r.wy1);
       const x1 = Math.max(r.wx0, r.wx1);
       const y1 = Math.max(r.wy0, r.wy1);
+      const indices = this.selectionController.previewMarqueeIndices(this.shapes, x0, y0, x1, y1);
 
-      const selected = this.shapes.filter(s => {
-        const bb = s.getBoundingBox();
-        const bx0 = bb.topLeft.x.toUnit('px');
-        const by0 = bb.topLeft.y.toUnit('px');
-        const bx1 = bx0 + bb.width.toUnit('px');
-        const by1 = by0 + bb.height.toUnit('px');
 
-        return !(bx1 < x0 || bx0 > x1 || by1 < y0 || by0 > y1);
-      });
+     const selected = this.selectionController.getShapesByIndices(this.shapes, indices);
 
-      this.selection.apply({
-        type: r.shift ? 'add' : 'replace',
-        shapes: selected
-      });
 
+      
+      this.selectionController.commitMarquee(selected, r.shift);
       this._previewShapes = null;
       this.interaction.previewSelectedIndices = null;
-      this.selection.syncIndices(this.shapes);
+      this.selectionController.syncIndices(this.shapes);
+
     }
 
 
@@ -475,10 +461,7 @@ export class CanvasTabComponent
     if (this.interaction.activeInteraction?.type === 'drag-shape') {
       const drag = this.interaction.activeInteraction;
 
-      const targets =
-        this.selection.selectedShapes.length > 1 && this.selection.selectedShapes.includes(drag.original)
-          ? this.selection.selectedShapes
-          : [drag.original];
+      const targets = this.selectionController.getDragTargets(drag.original);
 
       if (this.interaction.lastDragDx && this.interaction.lastDragDy) {
         this.applyGroupTransform(targets, s => s.translate(this.interaction.lastDragDx!, this.interaction.lastDragDy!));
@@ -488,7 +471,8 @@ export class CanvasTabComponent
       this.interaction.lastDragDy = null;
       this._previewShapes = null;
       this.interaction.previewSelectedIndices = null;
-      this.selection.syncIndices(this.shapes);
+      this.selectionController.syncIndices(this.shapes);
+
     }
 
     this.interaction.pointerUp({ pointerId: e.pointerId });
@@ -515,32 +499,31 @@ export class CanvasTabComponent
 
     if (!found) {
       // Click on empty: clear selection (but Shift+click empty should preserve selection)
-      if (!e.shiftKey) {
-        this.selection.apply({ type: 'replace', shapes: [] });
-        this.selection.syncIndices(this.shapes);
-        this.render();
-      }
+      this.selectionController.pointerDownOnEmpty(e.shiftKey);
+      this.selectionController.syncIndices(this.shapes);
+      this.render();
       return;
     }
 
-    this.selection.apply({
-      type: e.shiftKey ? 'toggle' : 'replace',
-      shapes: [found]
-    });
-
-    this.selection.syncIndices(this.shapes);
+    this.selectionController.clickOnShape(found, e.shiftKey);
+    this.selectionController.syncIndices(this.shapes);
     this.render();
-
 
   };
   public drawOverlays(ctx: CanvasRenderingContext2D) {
     const canvas = this.canvasRef.nativeElement;
     const shapesForOverlay: Shape[] = this._previewShapes ?? this.shapes;
+    const selectedIndices = this.interaction.previewSelectedIndices ?? this.selectionController.getSelectedIndices();
 
+    const groupBoundingBox =
+      selectedIndices.length
+        ? this.selectionController.getGroupBoundingBoxFor(shapesForOverlay, selectedIndices)
+        : null;
     this.overlayRenderer.draw(ctx, canvas, {
       viewport: this.viewport,
       shapesForOverlay,
-      selectedIndices: this.interaction.previewSelectedIndices ?? this.selection.selectedIndices,
+      selectedIndices,
+      groupBoundingBox,
       hoveredShape: this.hoveredShape,
       pointerScreen:
         this._pointerScreenX != null && this._pointerScreenY != null

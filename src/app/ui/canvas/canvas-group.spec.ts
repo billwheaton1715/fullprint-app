@@ -102,36 +102,36 @@ describe('CanvasTabComponent group selection and transformations', () => {
     expect(comp.shapes[1].topLeft.x.toUnit('mm')).toBeCloseTo(r2.topLeft.x.toUnit('mm') + dxMm);
   });
 
-  // it('group scale and rotate maintain relative positions', () => {
-  //   const { comp } = setupComponent();
-  //   const r1 = new Rectangle(
-  //     new Point(Measurement.fromMm(0), Measurement.fromMm(0)),
-  //     Measurement.fromMm(10),
-  //     Measurement.fromMm(10)
-  //   );
-  //   const r2 = new Rectangle(
-  //     new Point(Measurement.fromMm(20), Measurement.fromMm(0)),
-  //     Measurement.fromMm(10),
-  //     Measurement.fromMm(10)
-  //   );
+  it('group scale and rotate maintain relative positions', () => {
+    const { comp } = setupComponent();
+    const r1 = new Rectangle(
+      new Point(Measurement.fromMm(0), Measurement.fromMm(0)),
+      Measurement.fromMm(10),
+      Measurement.fromMm(10)
+    );
+    const r2 = new Rectangle(
+      new Point(Measurement.fromMm(20), Measurement.fromMm(0)),
+      Measurement.fromMm(10),
+      Measurement.fromMm(10)
+    );
 
-  //   comp.shapes = [r1, r2];
-  //   (comp as any).selection.selectedShapes = [r1, r2];
+    comp.shapes = [r1, r2];
+    (comp as any).selection.selectedShapes = [r1, r2];
 
-  //   const bbox = comp.getGroupBoundingBox((comp as any).selection.selectedShapes);
-  //   expect(bbox).toBeNull();
-  // });
+    const bbox = (comp as any).selection.getGroupBoundingBox(comp.shapes);
+    expect(bbox).toBeNull();
+  });
 
-  // it('group bbox updates after transformations', () => {
-  //   const { comp } = setupComponent();
-  //   const r1 = new Rectangle(new Point(Measurement.fromMm(0), Measurement.fromMm(0)), new Measurement(10, 'mm'), new Measurement(10, 'mm'));
-  //   const r2 = new Rectangle(new Point(Measurement.fromMm(20), Measurement.fromMm(0)), new Measurement(10, 'mm'), new Measurement(10, 'mm'));
-  //   comp.shapes = [r1, r2];
-  //   (comp as any).selection.selectedShapes = [r1, r2];
-  //   (comp as any).viewport = new CanvasViewport({ scale: 1, offsetX: 0, offsetY: 0 } as any);
-  //   const bbox = comp.getGroupBoundingBox((comp as any).selection.selectedShapes);
-  //   expect(bbox).toBeNull();
-  // });
+  it('group bbox updates after transformations', () => {
+    const { comp } = setupComponent();
+    const r1 = new Rectangle(new Point(Measurement.fromMm(0), Measurement.fromMm(0)), new Measurement(10, 'mm'), new Measurement(10, 'mm'));
+    const r2 = new Rectangle(new Point(Measurement.fromMm(20), Measurement.fromMm(0)), new Measurement(10, 'mm'), new Measurement(10, 'mm'));
+    comp.shapes = [r1, r2];
+    (comp as any).selection.selectedShapes = [r1, r2];
+    (comp as any).viewport = new CanvasViewport({ scale: 1, offsetX: 0, offsetY: 0 } as any);
+    const bbox = (comp as any).selection.getGroupBoundingBox(comp.shapes);
+    expect(bbox).toBeNull();
+  });
 
   it('group transformations respect viewport zoom/pan', () => {
     const { comp } = setupComponent();

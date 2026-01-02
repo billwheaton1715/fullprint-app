@@ -115,15 +115,15 @@ describe('CanvasTabComponent (modern event & geometry)', () => {
     expect(selected.topLeft.y.toUnit('px')).toBeCloseTo(10, 1); // y unchanged
   });
 
-  // it('getGroupBoundingBox returns correct bbox for selection', () => {
-  //   const { comp } = setupComponent();
-  //   const rect = new Rectangle(new Point(Measurement.fromPx(10), Measurement.fromPx(10)), Measurement.fromPx(30), Measurement.fromPx(30));
-  //   const circ = new Circle(new Point(Measurement.fromPx(80), Measurement.fromPx(80)), Measurement.fromPx(15));
-  //   comp.shapes = [rect, circ];
-  //   (comp as any).selection.selectedShapes = [rect, circ];
-  //   const bbox = comp.getGroupBoundingBox((comp as any).selection.selectedShapes);
-  //   expect(bbox).toBeNull();
-  // });
+  it('getGroupBoundingBox returns correct bbox for selection', () => {
+    const { comp } = setupComponent();
+    const rect = new Rectangle(new Point(Measurement.fromPx(10), Measurement.fromPx(10)), Measurement.fromPx(30), Measurement.fromPx(30));
+    const circ = new Circle(new Point(Measurement.fromPx(80), Measurement.fromPx(80)), Measurement.fromPx(15));
+    comp.shapes = [rect, circ];
+    (comp as any).selection.selectedShapes = [rect, circ];
+    const bbox = (comp as any).selection.getGroupBoundingBox(comp.shapes);
+    expect(bbox).toBeNull();
+  });
 
   it('renders overlays (grid, bbox, selection)', () => {
     const { comp, canvas } = setupComponent();
