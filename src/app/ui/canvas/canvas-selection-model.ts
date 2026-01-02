@@ -17,6 +17,7 @@ export class CanvasSelectionModel {
    * This does NOT automatically rebuild indices; call syncIndices(...) after selection changes.
    */
   apply(op: SelectionOperation) {
+    const before = this.selectedShapes.slice();
     switch (op.type) {
       case 'replace':
         this.selectedShapes = op.shapes.slice();
@@ -36,6 +37,11 @@ export class CanvasSelectionModel {
         }
         break;
     }
+    if (before.length !== this.selectedShapes.length) return true;
+    for (let i = 0; i < before.length; i++) {
+      if (before[i] !== this.selectedShapes[i]) return true;
+    }
+    return false;
   }
 
   /**
@@ -114,7 +120,7 @@ export class CanvasSelectionModel {
     return this.computeGroupBoundingBox(selected);
   }
 
-  
+
   isSelected(shape: Shape): boolean {
     return this.includes(shape);
   }
