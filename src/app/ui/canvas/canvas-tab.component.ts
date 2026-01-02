@@ -13,7 +13,7 @@
  *    - Track: pointermove (with pointer capture)
  *    - Commit: pointerup (selects intersecting shapes)
  *
- * 3. Pan (middle mouse button, no pointer capture):
+ * 3. Pan (middle mouse button (button===1), no pointer capture):
  *    - Begin: pointerdown (button 1)
  *    - Track: pointermove
  *    - End: pointerup
@@ -68,6 +68,7 @@ import { CommonModule } from '@angular/common';
 import { CanvasRendererService } from './canvas-renderer.service';
 import { CanvasOverlayRenderer } from './canvas-overlay-renderer';
 import { CanvasSelectionModel} from './canvas-selection-model';
+import { CanvasInteractionController } from './canvas-interaction-controller';
 
 import { CanvasViewport } from './canvas-viewport';
 import Shape from '../../core/geometry/Shape';
@@ -105,16 +106,6 @@ export class CanvasTabComponent
 
   @Input() shapes: any[] = [];
   private _previewShapes: Shape[] | null = null;
-  private _previewSelectedIndices: number[] | null = null;
-
-  private _didDrag = false;
-  private _lastDragDx: Measurement | null = null;
-  private _lastDragDy: Measurement | null = null;
-  private _suppressNextClickSelection = false;
-  private _downScreenX: number | null = null;
-  private _downScreenY: number | null = null;
-  private _dragThresholdPx = 4;
-
 
   @Input() showBoundingBoxes = false;
   @Input() showGrid = false;
@@ -134,12 +125,8 @@ export class CanvasTabComponent
 
   private resizeObserver?: ResizeObserver;
 
-  private activeInteraction: null | (
-    | { type: 'drag-shape'; original: Shape; startWorldX: number; startWorldY: number }
-    | { type: 'drag-select'; x0: number; y0: number; x1: number; y1: number; shift: boolean }
-  ) = null;
-
   private overlayRenderer = new CanvasOverlayRenderer();
+  private interaction = new CanvasInteractionController();
 
   constructor(private renderer: CanvasRendererService) {}
 
@@ -167,10 +154,7 @@ export class CanvasTabComponent
 
       this.shapes = newShapes;
       this.selection.remapAfterShapeReplacement(oldToNew, this.shapes);
-
     }
-
-
     return newShapes;
   }
 
@@ -191,8 +175,6 @@ export class CanvasTabComponent
     canvas.addEventListener('click', this.onClick);
 
     canvas.addEventListener('pointermove', this.onPointerMove);
-
-//    window.addEventListener('pointermove', this.onPointerMove);
     window.addEventListener('pointerup', this.onPointerUp);
 
     // TEMP DEBUG: remove once parent provides shapes
@@ -209,7 +191,7 @@ export class CanvasTabComponent
           Measurement.fromPx(90)
         ),
 
-    // Triangle A
+        // Triangle A
         new Triangle(
           new Point(Measurement.fromPx(200), Measurement.fromPx(300)),
           new Point(Measurement.fromPx(260), Measurement.fromPx(380)),
@@ -225,8 +207,7 @@ export class CanvasTabComponent
       ];
       this.render();
     }
-
-
+    // END TEMP DEBUG: remove once parent provides shapes
     this.resizeCanvas();
     this.render();
   }
@@ -292,39 +273,39 @@ export class CanvasTabComponent
   private onPointerDown = (e: PointerEvent) => {
     const canvas = this.canvasRef.nativeElement;
     const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
-    this._downScreenX = sx;
-    this._downScreenY = sy;
-
     const world = this.viewport.screenToWorld(sx, sy);
+
+    this.interaction.clearPreview();
+
 
     if (e.button === 0) {
       const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
       const hit = [...this.shapes].reverse().find(s => s.containsPoint?.(p)) ?? null;
 
+      this.interaction.pointerDown({
+        sx, sy,
+        worldX: world.xPx,
+        worldY: world.yPx,
+        button: e.button,
+        shiftKey: e.shiftKey,
+        pointerId: e.pointerId,
+        hit
+      });
+
+      this._previewShapes = null;
+
       canvas.setPointerCapture?.(e.pointerId);
 
       if (hit) {
-//        canvas.setPointerCapture?.(e.pointerId);
-
         // SHIFT behavior: toggle immediately on pointerdown (and skip click handler)
         if (e.shiftKey) {
           this.selection.apply({ type: 'toggle', shapes: [hit] });
           this.selection.syncIndices(this.shapes);
-          this._suppressNextClickSelection = true;
+          this.interaction.setSuppressNextClickSelection();
 
-          // If the toggle turned it ON, allow drag to start right away.
-          // If the toggle turned it OFF, do not start a drag interaction.
-          if (this.selection.selectedShapes.includes(hit)) {
-            this.activeInteraction = {
-              type: 'drag-shape',
-              original: hit,
-              startWorldX: world.xPx,
-              startWorldY: world.yPx
-            };
-            this._lastDragDx = null;
-            this._lastDragDy = null;
-          } else {
-            this.activeInteraction = null;
+          // if toggled OFF, cancel drag
+          if (!this.selection.selectedShapes.includes(hit)) {
+            this.interaction.activeInteraction = null;
           }
 
           this.render(); // show the toggle immediately
@@ -335,35 +316,9 @@ export class CanvasTabComponent
         if (!this.selection.selectedShapes.includes(hit)) {
           this.selection.apply({ type: 'replace', shapes: [hit] });
           this.selection.syncIndices(this.shapes);
-
-          // Optional: prevent click from re-doing selection (keeps logic single-source)
-          this._suppressNextClickSelection = true;
+          this.interaction.setSuppressNextClickSelection();
         }
-
-        this.activeInteraction = {
-          type: 'drag-shape',
-          original: hit,
-          startWorldX: world.xPx,
-          startWorldY: world.yPx
-        };
-        this._lastDragDx = null;
-        this._lastDragDy = null;
-      } else {
-//        canvas.setPointerCapture?.(e.pointerId);
-        this._previewSelectedIndices = null;
-
-        // Only empty space starts drag-select        
-        this.activeInteraction = {
-          type: 'drag-select',
-          x0: sx,
-          y0: sy,
-          x1: sx,
-          y1: sy,
-          shift: e.shiftKey
-        };
-      }
-
-
+      } 
     }
 
     if (e.button === 1) {
@@ -379,26 +334,20 @@ export class CanvasTabComponent
     const canvas = this.canvasRef.nativeElement;
     const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
 
-
     this._pointerScreenX = sx;
     this._pointerScreenY = sy;
 
-    if (this.activeInteraction) return;   
+    if (this.interaction.activeInteraction) return;   
 
     const world = this.viewport.screenToWorld(sx, sy);
     const p = new Point(Measurement.fromPx(world.xPx), Measurement.fromPx(world.yPx));
 
-    this.hoveredShape =
-      [...this.shapes].reverse().find(s => s.containsPoint?.(p)) ?? null;
+    this.hoveredShape = [...this.shapes].reverse().find(s => s.containsPoint?.(p)) ?? null;
 
     this.render();
-    
-
   };
 
   private onPointerMove = (e: PointerEvent) => {
-    //console.log('pointermove', this.activeInteraction?.type);
-
      if (this._isPanning) {
       this.viewport.panBy(e.clientX - this._lastX, e.clientY - this._lastY);
       this._lastX = e.clientX;
@@ -407,25 +356,21 @@ export class CanvasTabComponent
       return
     }
 
-    if (!this.activeInteraction) return;
+    if (!this.interaction.activeInteraction) return;
 
     const canvas = this.canvasRef.nativeElement;
     const { sx, sy } = this.viewport.getScreenCoordsFromEvent(e, canvas);
-    const dx0 = this._downScreenX == null ? 0 : (sx - this._downScreenX);
-    const dy0 = this._downScreenY == null ? 0 : (sy - this._downScreenY);
-    const isPastThreshold = (dx0 * dx0 + dy0 * dy0) >= (this._dragThresholdPx * this._dragThresholdPx);
+    const pm = this.interaction.pointerMove({ sx, sy, clientX: e.clientX, clientY: e.clientY });
 
     this._pointerScreenX = sx;
     this._pointerScreenY = sy;
 
-    if (this.activeInteraction?.type === 'drag-select') {
-      if (!isPastThreshold) return;
-      this._didDrag = true;
+    if (pm.kind === 'drag-select') {
+      if (!pm.isPastThreshold) return;
+      this.interaction.markDidDrag()
 
-
-      this.activeInteraction.x1 = sx;
-      this.activeInteraction.y1 = sy;
-      const r = this.activeInteraction;
+      const r = this.interaction.activeInteraction;
+      if (r?.type !== 'drag-select') return;
 
       const x0 = Math.min(r.x0, r.x1);
       const y0 = Math.min(r.y0, r.y1);
@@ -442,31 +387,29 @@ export class CanvasTabComponent
         return !(bx1 < x0 || bx0 > x1 || by1 < y0 || by0 > y1);
       });
 
-      this._previewShapes = this.shapes;
-      this._previewSelectedIndices = previewSelected
+      this.interaction.previewSelectedIndices = previewSelected
         .map(s => this.shapes.indexOf(s))
         .filter(i => i !== -1);
+      this._previewShapes = this.shapes;
 
       this.render();
-      
-
       return;
     }
 
-    if (this.activeInteraction?.type === 'drag-shape') {
-      if (!isPastThreshold) return;
-      this._didDrag = true;
+    if (pm.kind === 'drag-shape') {
+      if (!pm.isPastThreshold) return;
+      this.interaction.markDidDrag();
 
-
-      const drag = this.activeInteraction;
+      const drag = this.interaction.activeInteraction;
+      if (drag?.type !== 'drag-shape') return;
 
       const worldNow = this.viewport.screenToWorld(sx, sy);
 
       const dx = Measurement.fromPx(worldNow.xPx - drag.startWorldX);
       const dy = Measurement.fromPx(worldNow.yPx - drag.startWorldY);
 
-      this._lastDragDx = dx;
-      this._lastDragDy = dy;
+      this.interaction.lastDragDx = dx;
+      this.interaction.lastDragDy = dy;
 
       const targets =
         this.selection.selectedShapes.length > 1 && this.selection.selectedShapes.includes(drag.original)
@@ -482,10 +425,15 @@ export class CanvasTabComponent
   };
 
   private onPointerUp = (e: PointerEvent) => {
-    this.canvasRef.nativeElement.releasePointerCapture?.(e.pointerId);
+//    this.canvasRef.nativeElement.releasePointerCapture?.(e.pointerId);
+    const canvas = this.canvasRef.nativeElement;
+    if (canvas.hasPointerCapture?.(e.pointerId)) {
+      canvas.releasePointerCapture(e.pointerId);
+    }
 
-    if (this.activeInteraction?.type === 'drag-select') {
-      const r = this.activeInteraction;
+
+    if (this.interaction.activeInteraction?.type === 'drag-select') {
+      const r = this.interaction.activeInteraction;
 
       const x0 = Math.min(r.x0, r.x1);
       const y0 = Math.min(r.y0, r.y1);
@@ -508,55 +456,42 @@ export class CanvasTabComponent
       });
 
       this._previewShapes = null;
-      this._previewSelectedIndices = null;
+      this.interaction.previewSelectedIndices = null;
       this.selection.syncIndices(this.shapes);
       
     }
 
 
-    if (this.activeInteraction?.type === 'drag-shape') {
-      const drag = this.activeInteraction;
+    if (this.interaction.activeInteraction?.type === 'drag-shape') {
+      const drag = this.interaction.activeInteraction;
 
       const targets =
         this.selection.selectedShapes.length > 1 && this.selection.selectedShapes.includes(drag.original)
           ? this.selection.selectedShapes
           : [drag.original];
 
-      if (this._lastDragDx && this._lastDragDy) {
-        this.applyGroupTransform(targets, s => s.translate(this._lastDragDx!, this._lastDragDy!));
+      if (this.interaction.lastDragDx && this.interaction.lastDragDy) {
+        this.applyGroupTransform(targets, s => s.translate(this.interaction.lastDragDx!, this.interaction.lastDragDy!));
       }
 
-      this._lastDragDx = null;
-      this._lastDragDy = null;
+      this.interaction.lastDragDx = null;
+      this.interaction.lastDragDy = null;
       this._previewShapes = null;
-      this._previewSelectedIndices = null;
+      this.interaction.previewSelectedIndices = null;
       this.selection.syncIndices(this.shapes);
     }
 
+    this.interaction.pointerUp({ pointerId: e.pointerId });
 
-    this.activeInteraction = null;
     this._isPanning = false;
     this.updateHoverFromPointer();
-
     this.render();
-
-    this._downScreenX = null;
-    this._downScreenY = null;
-
 
   };
 
   private onClick = (e: MouseEvent) => {
-    if (this._didDrag) {
-      this._didDrag = false;
-      return;
-    }
 
-    if (this._suppressNextClickSelection) {
-      this._suppressNextClickSelection = false;
-      return;
-    }
-
+    if (this.interaction.clickShouldBeSuppressed()) return;
 
     if (this._isPanning) return;
 
@@ -595,7 +530,7 @@ export class CanvasTabComponent
     this.overlayRenderer.draw(ctx, canvas, {
       viewport: this.viewport,
       shapesForOverlay,
-      selectedIndices: this._previewSelectedIndices ?? this.selection.selectedIndices,
+      selectedIndices: this.interaction.previewSelectedIndices ?? this.selection.selectedIndices,
       hoveredShape: this.hoveredShape,
       pointerScreen:
         this._pointerScreenX != null && this._pointerScreenY != null
@@ -604,8 +539,8 @@ export class CanvasTabComponent
       showGrid: this.showGrid,
       showBoundingBoxes: this.showBoundingBoxes,
       dragSelectRect:
-        this.activeInteraction?.type === 'drag-select'
-          ? { x0: this.activeInteraction.x0, y0: this.activeInteraction.y0, x1: this.activeInteraction.x1, y1: this.activeInteraction.y1 }
+        this.interaction.activeInteraction?.type === 'drag-select'
+          ? { x0: this.interaction.activeInteraction.x0, y0: this.interaction.activeInteraction.y0, x1: this.interaction.activeInteraction.x1, y1: this.interaction.activeInteraction.y1 }
           : null
     });
   }
