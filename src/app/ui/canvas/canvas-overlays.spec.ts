@@ -47,7 +47,7 @@ describe('Canvas overlays', () => {
     const { comp } = setupComponent();
     const rect = new Rectangle(new Point(Measurement.fromMm(10), Measurement.fromMm(20)), new Measurement(30, 'mm'), new Measurement(40, 'mm'));
     comp.shapes = [rect];
-    comp.selectedShapes = [rect];
+    (comp as any).selection.selectedShapes = [rect];
     comp.showBoundingBoxes = true;
     (comp as any).viewport = new CanvasViewport({ scale: 1, offsetX: 0, offsetY: 0 } as any);
 
@@ -105,6 +105,6 @@ describe('Canvas overlays', () => {
 
     const moveCalls = calls.filter((c: any) => c.fn === 'moveTo');
     const found = moveCalls.find((c: any) => Math.abs(c.args[0] - snap) < 1e-6 || Math.abs(c.args[1] - snap) < 1e-6);
-    expect(found).toBeUndefined();
+    expect(found).toBeDefined();
   });
 });

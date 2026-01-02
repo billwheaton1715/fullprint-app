@@ -25,7 +25,7 @@ export interface CanvasOverlayState {
   showGrid: boolean;
   showBoundingBoxes: boolean;
 
-  // Drag-select marquee rect in screen coords (or null)
+  // Drag-select marquee rect in WORLD coords (px), since overlays render under viewport transform
   dragSelectRect: DragSelectRect;
 }
 
@@ -168,7 +168,13 @@ export class CanvasOverlayRenderer {
       ctx.strokeStyle = '#0078D7';
       ctx.setLineDash([4, 2]);
       ctx.lineWidth = 1.5 / (viewport.getScale() || 1);
-      ctx.strokeRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+      const x0 = Math.min(r.x0, r.x1);
+      const y0 = Math.min(r.y0, r.y1);
+      const x1 = Math.max(r.x0, r.x1);
+      const y1 = Math.max(r.y0, r.y1);
+
+      ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+
       ctx.restore();
     }
 

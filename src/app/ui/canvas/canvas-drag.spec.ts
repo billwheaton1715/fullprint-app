@@ -36,7 +36,7 @@ describe('Canvas drag-to-move selected shape', () => {
     const { comp, renderer, canvas } = setupComponent();
     const rect = new Rectangle(new Point(Measurement.fromMm(10), Measurement.fromMm(10)), new Measurement(20, 'mm'), new Measurement(10, 'mm'));
     comp.shapes = [rect];
-    comp.selectedShapes = [rect];
+    (comp as any).selection.selectedShapes = [rect];
     (comp as any).viewport = new CanvasViewport({ scale: 1, offsetX: 0, offsetY: 0 } as any);
 
     const startScreenX = rect.topLeft.x.toUnit('px') + 5;
@@ -67,7 +67,7 @@ describe('Canvas drag-to-move selected shape', () => {
     const { comp, renderer, canvas } = setupComponent();
     const rect = new Rectangle(new Point(Measurement.fromMm(0), Measurement.fromMm(0)), new Measurement(10, 'mm'), new Measurement(10, 'mm'));
     comp.shapes = [rect];
-    comp.selectedShapes = [rect];
+    (comp as any).selection.selectedShapes = [rect];
     (comp as any).viewport = new CanvasViewport({ scale: 1, offsetX: 0, offsetY: 0 } as any);
 
     // First drag: move by (10, 0)

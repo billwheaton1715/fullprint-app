@@ -3,7 +3,8 @@ import Measurement from '../../core/units/Measurement';
 
 export type DragInteraction =
   | { type: 'drag-shape'; original: Shape; startWorldX: number; startWorldY: number }
-  | { type: 'drag-select'; x0: number; y0: number; x1: number; y1: number; shift: boolean };
+  | { type: 'drag-select'; wx0: number; wy0: number; wx1: number; wy1: number; shift: boolean };
+
 
 export interface PointerDownContext {
   sx: number;
@@ -81,15 +82,16 @@ export class CanvasInteractionController {
       return { kind: 'none' };
     }
 
-    // Empty space starts drag-select
+
     this.activeInteraction = {
       type: 'drag-select',
-      x0: ctx.sx,
-      y0: ctx.sy,
-      x1: ctx.sx,
-      y1: ctx.sy,
+      wx0: ctx.worldX,
+      wy0: ctx.worldY,
+      wx1: ctx.worldX,
+      wy1: ctx.worldY,
       shift: ctx.shiftKey
     };
+    
     this.previewSelectedIndices = null;
     return { kind: 'none' };
   }
@@ -102,14 +104,12 @@ export class CanvasInteractionController {
     const isPastThreshold = (dx0 * dx0 + dy0 * dy0) >= (this.dragThresholdPx * this.dragThresholdPx);
 
     if (this.activeInteraction.type === 'drag-select') {
-      // update marquee coords regardless; caller may choose to render only after threshold
-      this.activeInteraction.x1 = ctx.sx;
-      this.activeInteraction.y1 = ctx.sy;
       return { kind: 'drag-select', isPastThreshold };
     }
 
     return { kind: 'drag-shape', isPastThreshold };
   }
+
 
   pointerUp(_ctx: PointerUpContext): InteractionUpdate {
     // end drag states

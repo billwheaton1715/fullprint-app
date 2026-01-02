@@ -367,15 +367,22 @@ export class CanvasTabComponent
 
     if (pm.kind === 'drag-select') {
       if (!pm.isPastThreshold) return;
-      this.interaction.markDidDrag()
+      this.interaction.markDidDrag();
 
       const r = this.interaction.activeInteraction;
       if (r?.type !== 'drag-select') return;
 
-      const x0 = Math.min(r.x0, r.x1);
-      const y0 = Math.min(r.y0, r.y1);
-      const x1 = Math.max(r.x0, r.x1);
-      const y1 = Math.max(r.y0, r.y1);
+      // **THIS IS THE KEY FIX**
+      // Update world end-point from current pointer (screen -> world)
+      const worldNow = this.viewport.screenToWorld(sx, sy);
+      r.wx1 = worldNow.xPx;
+      r.wy1 = worldNow.yPx;
+
+      // Use WORLD rectangle for hit testing
+      const x0 = Math.min(r.wx0, r.wx1);
+      const y0 = Math.min(r.wy0, r.wy1);
+      const x1 = Math.max(r.wx0, r.wx1);
+      const y1 = Math.max(r.wy0, r.wy1);
 
       const previewSelected = this.shapes.filter(s => {
         const bb = s.getBoundingBox();
@@ -390,11 +397,12 @@ export class CanvasTabComponent
       this.interaction.previewSelectedIndices = previewSelected
         .map(s => this.shapes.indexOf(s))
         .filter(i => i !== -1);
-      this._previewShapes = this.shapes;
 
+      this._previewShapes = this.shapes;
       this.render();
       return;
     }
+
 
     if (pm.kind === 'drag-shape') {
       if (!pm.isPastThreshold) return;
@@ -435,10 +443,11 @@ export class CanvasTabComponent
     if (this.interaction.activeInteraction?.type === 'drag-select') {
       const r = this.interaction.activeInteraction;
 
-      const x0 = Math.min(r.x0, r.x1);
-      const y0 = Math.min(r.y0, r.y1);
-      const x1 = Math.max(r.x0, r.x1);
-      const y1 = Math.max(r.y0, r.y1);
+      // World rectangle
+      const x0 = Math.min(r.wx0, r.wx1);
+      const y0 = Math.min(r.wy0, r.wy1);
+      const x1 = Math.max(r.wx0, r.wx1);
+      const y1 = Math.max(r.wy0, r.wy1);
 
       const selected = this.shapes.filter(s => {
         const bb = s.getBoundingBox();
@@ -458,8 +467,9 @@ export class CanvasTabComponent
       this._previewShapes = null;
       this.interaction.previewSelectedIndices = null;
       this.selection.syncIndices(this.shapes);
-      
     }
+
+
 
 
     if (this.interaction.activeInteraction?.type === 'drag-shape') {
@@ -538,10 +548,15 @@ export class CanvasTabComponent
           : null,
       showGrid: this.showGrid,
       showBoundingBoxes: this.showBoundingBoxes,
-      dragSelectRect:
-        this.interaction.activeInteraction?.type === 'drag-select'
-          ? { x0: this.interaction.activeInteraction.x0, y0: this.interaction.activeInteraction.y0, x1: this.interaction.activeInteraction.x1, y1: this.interaction.activeInteraction.y1 }
-          : null
+      dragSelectRect: (() => {
+        const a = this.interaction.activeInteraction;
+        if (!a || a.type !== 'drag-select') return null;
+
+        // WORLD coords (px) because overlay drawing happens under viewport transform
+        return { x0: a.wx0, y0: a.wy0, x1: a.wx1, y1: a.wy1 };
+      })()
+
+
     });
   }
 
