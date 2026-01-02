@@ -71,9 +71,12 @@ import { CanvasSelectionModel} from './canvas-selection-model';
 import { CanvasInteractionController } from './canvas-interaction-controller';
 import { CanvasSelectionController } from './canvas-selection-controller';
 import { CanvasHitTestController } from './canvas-hit-test-controller';
+import { CanvasTransformController } from './canvas-transform-controller';
+import { CanvasPanZoomController } from './canvas-pan-zoom-controller';
 import { CanvasViewport } from './canvas-viewport';
 
 import Shape from '../../core/geometry/Shape';
+import { CanvasMarqueeController } from './canvas-marquee-controller';
 
 @Component({
   standalone: true,
@@ -120,10 +123,9 @@ export class CanvasTabComponent
   private _pointerScreenX: number | null = null;
   private _pointerScreenY: number | null = null;
 
-  private _isPanning = false;
-  private _lastX = 0;
-  private _lastY = 0;
+  private panZoom = new CanvasPanZoomController(this.viewport);
 
+ 
   private resizeObserver?: ResizeObserver;
 
   private overlayRenderer = new CanvasOverlayRenderer();
@@ -132,39 +134,14 @@ export class CanvasTabComponent
   private hitTest = new CanvasHitTestController();
   private _rafId: number | null = null;
   private _needsRender = false;
+  private transformController = new CanvasTransformController();
+  private marquee = new CanvasMarqueeController(this.interaction, this.hitTest);
+
 
   constructor(private renderer: CanvasRendererService) {}
 
   
-  private applyGroupTransform(
-    targets: Shape[],
-    transformFn: (shape: Shape) => Shape,
-    previewOnly = false
-  ): Shape[] {
-    if (!targets.length) return this.shapes;
-
-    const targetSet = new Set(targets);
-    const newShapes = this.shapes.map(s =>
-      targetSet.has(s) ? transformFn(s) : s
-    );
-
-    if (!previewOnly) {
-      const oldToNew = new Map<Shape, Shape>();
-
-      this.shapes.forEach((oldShape, i) => {
-        if (targetSet.has(oldShape)) {
-          oldToNew.set(oldShape, newShapes[i]);
-        }
-      });
-
-      this.shapes = newShapes;
-      this.selectionController.remapAfterShapeReplacement(oldToNew, this.shapes);
-
-    }
-    return newShapes;
-  }
-
-  ngOnInit(): void {}
+   ngOnInit(): void {}
 
   ngAfterViewInit(): void {
     this._mounted = true;
@@ -273,10 +250,8 @@ export class CanvasTabComponent
 
   private onWheel = (e: WheelEvent) => {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const { sx, sy } = this.getScreenFromEvent(e);
-    this.viewport.zoomAt(delta, sx, sy);
-    this.invalidate();
+    if (this.panZoom.wheel(e, sx, sy)) this.invalidate();
   };
 
   private onPointerDown = (e: PointerEvent) => {
@@ -328,11 +303,11 @@ export class CanvasTabComponent
       }
     }
 
-    if (e.button === 1) {
-      this._isPanning = true;
-      this._lastX = e.clientX;
-      this._lastY = e.clientY;
+    if (this.panZoom.pointerDown(e)) {
+      // optional: avoid click selection glitches on middle button
+      return;
     }
+
   };
 
 
@@ -355,13 +330,11 @@ export class CanvasTabComponent
 
 
   private onPointerMove = (e: PointerEvent) => {
-     if (this._isPanning) {
-      this.viewport.panBy(e.clientX - this._lastX, e.clientY - this._lastY);
-      this._lastX = e.clientX;
-      this._lastY = e.clientY;
+    if (this.panZoom.pointerMove(e)) {
       this.invalidate();
-      return
+      return;
     }
+
 
     if (!this.interaction.activeInteraction) return;
 
@@ -375,22 +348,8 @@ export class CanvasTabComponent
       if (!pm.isPastThreshold) return;
       this.interaction.markDidDrag();
 
-      const r = this.interaction.activeInteraction;
-      if (r?.type !== 'drag-select') return;
-
-      // Update world end-point from current pointer (screen -> world)
-      r.wx1 = world.xPx;
-      r.wy1 = world.yPx;
-
-      // Use WORLD rectangle for hit testing
-      const x0 = Math.min(r.wx0, r.wx1);
-      const y0 = Math.min(r.wy0, r.wy1);
-      const x1 = Math.max(r.wx0, r.wx1);
-      const y1 = Math.max(r.wy0, r.wy1);
-
-      this.interaction.previewSelectedIndices = this.hitTest.hitTestIntersectingRectIndices(this.shapes, x0, y0, x1, y1);
-
-      this.invalidate();
+      const changed = this.marquee.pointerMove(this.shapes, world.xPx, world.yPx);
+      if (changed) this.invalidate();
       return;
     }
 
@@ -402,18 +361,18 @@ export class CanvasTabComponent
       const drag = this.interaction.activeInteraction;
       if (drag?.type !== 'drag-shape') return;
 
-      const dx = Measurement.fromPx(world.xPx - drag.startWorldX);
-      const dy = Measurement.fromPx(world.yPx - drag.startWorldY);
-
-      this.interaction.lastDragDx = dx;
-      this.interaction.lastDragDy = dy;
+      const { dx, dy } = this.transformController.computeDragDelta(
+        drag,
+        world.xPx,
+        world.yPx
+      );
 
       const targets = this.selectionController.getDragTargets(drag.original);
-
-
-      this.invalidate(this.applyGroupTransform(targets, s => s.translate(dx, dy), true));
+      const preview = this.transformController.previewTranslate(this.shapes, targets, dx, dy);
+      this.invalidate(preview);
       return;
     }
+
 
 
 
@@ -430,17 +389,12 @@ export class CanvasTabComponent
     if (this.interaction.activeInteraction?.type === 'drag-select') {
       const r = this.interaction.activeInteraction;
 
-      // World rectangle
-      const x0 = Math.min(r.wx0, r.wx1);
-      const y0 = Math.min(r.wy0, r.wy1);
-      const x1 = Math.max(r.wx0, r.wx1);
-      const y1 = Math.max(r.wy0, r.wy1);
+      const selected = this.marquee.computeSelected(this.shapes) ?? [];
+      const changed = this.selectionController.commitMarquee(selected, r.shift);
 
-      const selected = this.hitTest.hitTestIntersectingRect(this.shapes, x0, y0, x1, y1);
-      this.selectionController.commitMarquee(selected, r.shift);
+      this.marquee.clearPreview();
+      if (changed) this.selectionController.syncIndices(this.shapes);
 
-      this.interaction.previewSelectedIndices = null;
-      this.selectionController.syncIndices(this.shapes);
       shouldClearPreview = true;
     }
 
@@ -449,24 +403,18 @@ export class CanvasTabComponent
 
     if (this.interaction.activeInteraction?.type === 'drag-shape') {
       const drag = this.interaction.activeInteraction;
-
       const targets = this.selectionController.getDragTargets(drag.original);
+      this.shapes = this.transformController.commitTranslate(this.shapes, targets, this.selectionController);
+      this.transformController.clearDelta();
 
-      if (this.interaction.lastDragDx && this.interaction.lastDragDy) {
-        this.applyGroupTransform(targets, s => s.translate(this.interaction.lastDragDx!, this.interaction.lastDragDy!));
-      }
-
-      this.interaction.lastDragDx = null;
-      this.interaction.lastDragDy = null;
-
-      this.interaction.previewSelectedIndices = null;
       this.selectionController.syncIndices(this.shapes);
       shouldClearPreview = true;
     }
 
     this.interaction.pointerUp({ pointerId: e.pointerId });
 
-    this._isPanning = false;
+    this.panZoom.pointerUp(e);
+
     this.updateHoverFromPointer();
     if (shouldClearPreview) this.clearPreview();
     this.invalidate();
@@ -477,7 +425,7 @@ export class CanvasTabComponent
 
     if (this.interaction.clickShouldBeSuppressed()) return;
 
-    if (this._isPanning) return;
+    if (this.panZoom.getIsPanning()) return;
 
     const { world } = this.getWorldFromEvent(e);
 
@@ -518,15 +466,7 @@ export class CanvasTabComponent
           : null,
       showGrid: this.showGrid,
       showBoundingBoxes: this.showBoundingBoxes,
-      dragSelectRect: (() => {
-        const a = this.interaction.activeInteraction;
-        if (!a || a.type !== 'drag-select') return null;
-
-        // WORLD coords (px) because overlay drawing happens under viewport transform
-        return { x0: a.wx0, y0: a.wy0, x1: a.wx1, y1: a.wy1 };
-      })()
-
-
+      dragSelectRect: this.marquee.getDragRect()
     });
   }
 
