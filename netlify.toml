@@ -1,0 +1,13 @@
+# Netlify configuration for Fullprint (Angular SPA)
+# --------------------------------------------------
+# Build settings (used when Netlify builds from a connected Git repo).
+# If you deploy by dragging the dist folder, these are ignored but harmless.
+[build]
+  command   = "npm run build -- --configuration production"
+  publish   = "dist/fullprint-app/browser"
+
+# SPA redirect: send every URL to index.html so Angular's router handles it.
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
